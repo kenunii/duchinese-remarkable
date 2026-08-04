@@ -1,0 +1,6 @@
+<RCC>
+  <qresource>
+    <file>ui/Main.qml</file>
+    <file alias="fonts/NotoSansSC.ttf">../../assets/fonts/NotoSansSC.ttf</file>
+  </qresource>
+</RCC>
