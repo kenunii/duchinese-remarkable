@@ -120,9 +120,9 @@ application.
 ## Status
 
 The DuChinese web application and the reMarkable 2 rendering stack have been
-investigated. A synthetic Qt Quick reader probe now builds and runs on an rM2
-using reMarkable's official E Ink backend. No credentials or proprietary
-DuChinese content are included.
+investigated. A synthetic native AppLoad frontend now builds and runs inside the
+standard reMarkable UI. No credentials or proprietary DuChinese content are
+included.
 
 The current UI is a synthetic interaction prototype. It demonstrates native
 AppLoad integration, Chinese rendering, and tap-to-show pinyin and meaning; it
@@ -202,23 +202,3 @@ scripts/build-appload-native.sh
 
 The generated `manifest.json` and `resources.rcc` are written to
 `build/appload-native`.
-
-## Standalone reader probe
-
-The first native reader probe lives in `apps/reader`. It targets the official
-rM2 SDK matching software 3.27 and uses the device-provided `epaper` Qt platform
-and scenegraph backends.
-
-Build it with:
-
-```sh
-scripts/build-rm2.sh
-```
-
-For a manual device test, copy the binary, Noto Sans SC font, and runner to a
-directory under `/home/root`, then run the runner as root. It temporarily stops
-`xochitl` and always starts it again when the reader exits.
-
-The standalone probe exits automatically after three minutes and contains only
-synthetic Chinese example text. It is retained for low-level rendering research;
-the AppLoad frontend is the recommended installation.
