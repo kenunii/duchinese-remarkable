@@ -1,6 +1,6 @@
 {
   "name": "DuChinese",
-  "loadsBackend": false,
+  "loadsBackend": true,
   "entry": "/ui/Main.qml",
   "id": "duchinese-remarkable",
   "supportsScaling": true,

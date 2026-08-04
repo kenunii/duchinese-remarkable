@@ -23,7 +23,14 @@ if [[ -z "$rcc_bin" ]]; then
 fi
 
 mkdir -p "$output_dir"
+mkdir -p "$output_dir/backend"
 cp "$source_dir/manifest.json" "$output_dir/manifest.json"
 "$rcc_bin" --binary -o "$output_dir/resources.rcc" "$source_dir/application.qrc"
+(
+    cd "$project_root/backend"
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 \
+        go build -trimpath -ldflags='-s -w' \
+        -o "$output_dir/backend/entry" ./cmd/duchinese-backend
+)
 
 echo "Built native AppLoad package in $output_dir"

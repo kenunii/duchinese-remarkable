@@ -108,25 +108,20 @@ application.
 - DuChinese is a trademark of its respective owner; this project is not
   affiliated with or endorsed by DuChinese.
 
-## Open decisions
-
-- target reMarkable model and CPU architecture
-- native Qt/QML app versus a community launcher/runtime integration
-- whether progress synchronization should initially be read-only or
-  bidirectional
-- local cache format and encryption expectations
-- installation and update mechanism for the tablet application
-
 ## Status
 
-The DuChinese web application and the reMarkable 2 rendering stack have been
-investigated. A synthetic native AppLoad frontend now builds and runs inside the
-standard reMarkable UI. No credentials or proprietary DuChinese content are
-included.
+The first end-to-end client is working on reMarkable 2: a native AppLoad QML
+frontend talks to a small, statically linked Go backend. It can browse featured
+and latest content, search, enter courses, open entitled stories, paginate their
+reader data, and reveal pinyin, meanings, and sentence translations.
 
-The current UI is a synthetic interaction prototype. It demonstrates native
-AppLoad integration, Chinese rendering, and tap-to-show pinyin and meaning; it
-does not yet sign in to DuChinese or download stories.
+Authentication currently imports an existing browser session. Passwords never
+reach this project, the cookie is not printed, and both the local and tablet
+session files are mode `0600`. No credentials or proprietary DuChinese content
+are included in the repository.
+
+Still to do: offline caching, reading-position persistence, a first-class login
+flow, progress/vocabulary synchronization, and broader compatibility testing.
 
 ## Quick setup on reMarkable 2
 
@@ -140,7 +135,8 @@ The tested combination is reMarkable 2 software 3.27.3, Xovi 0.3.3, and AppLoad
 1. Install [Xovi](https://github.com/asivery/xovi) on the tablet.
 2. Install AppLoad and its `qt-resource-rebuilder` dependency by following the
    [AppLoad documentation](https://github.com/asivery/rm-appload).
-3. On the computer, install Git, OpenSSH, and Qt 6's `rcc` resource compiler.
+3. On the computer, install Git, OpenSSH, Go, Python 3, and Qt 6's `rcc`
+   resource compiler.
 4. Connect the rM2 over USB and verify SSH:
 
    ```sh
@@ -148,6 +144,17 @@ The tested combination is reMarkable 2 software 3.27.3, Xovi 0.3.3, and AppLoad
    ```
 
 ### Install
+
+First sign in at `https://duchinese.net` in a desktop browser and export an HAR
+that includes request data while visiting the library. Treat this file as a
+secret. Import only its rotating session cookie:
+
+```sh
+scripts/import-session-from-har.py /path/to/duchinese.har
+```
+
+The generated file is outside the repository at
+`~/.config/duchinese-remarkable/session.json`. Then build and install:
 
 ```sh
 git clone https://github.com/kenunii/duchinese-remarkable.git
@@ -169,9 +176,10 @@ RCC_BIN=/path/to/qt6/rcc scripts/install-appload-rm2.sh
 
 The installer builds the resource bundle, copies it to
 `/home/root/xovi/exthome/appload/duchinese`, and restarts `xochitl`. Unlock the
-tablet, open AppLoad from the main UI, and tap **DuChinese**. Tap a Chinese word
-to show its pinyin and synthetic English meaning. Use AppLoad's top-edge gesture
-or the button at the bottom to close it.
+tablet, open AppLoad from the main UI, and tap **DuChinese**. Browse or search,
+open an unlocked story, and tap a Chinese word to show its pinyin, meaning, and
+sentence translation. Use AppLoad's top-edge gesture or the close button to
+leave it.
 
 Running the same installer again updates the existing installation.
 
@@ -182,6 +190,8 @@ Running the same installer again updates the existing installation.
 - SSH fails: enable USB web interface/developer access on the tablet and verify
   that `10.11.99.1` is reachable.
 - Build cannot find `rcc`: install Qt 6 development tools or set `RCC_BIN`.
+- Login required: export a fresh HAR, rerun the importer, and reinstall. The
+  session rotates as it is used; the backend persists replacements atomically.
 - To inspect AppLoad startup errors:
 
   ```sh
@@ -190,9 +200,11 @@ Running the same installer again updates the existing installation.
 
 ## Architecture
 
-The working integration lives in `packaging/appload-native`. It is a native
-AppLoad frontend rendered inside `xochitl`, so it does not compete with the
-reMarkable UI for the physical E Ink framebuffer.
+The frontend lives in `packaging/appload-native`; the provider adapter and
+AppLoad socket client live in `backend`. The native QML frontend renders inside
+`xochitl`, so it does not compete with the reMarkable UI for the physical E Ink
+framebuffer. The backend sends the DuChinese session only to `duchinese.net`
+and accepts reader assets only from `static.duchinese.net`.
 
 Build only the AppLoad package with:
 
