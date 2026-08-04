@@ -124,7 +124,86 @@ investigated. A synthetic Qt Quick reader probe now builds and runs on an rM2
 using reMarkable's official E Ink backend. No credentials or proprietary
 DuChinese content are included.
 
-## Reader development
+The current UI is a synthetic interaction prototype. It demonstrates native
+AppLoad integration, Chinese rendering, and tap-to-show pinyin and meaning; it
+does not yet sign in to DuChinese or download stories.
+
+## Quick setup on reMarkable 2
+
+This is unofficial software which modifies the running reMarkable UI. Make sure
+SSH access works and keep a recovery path before installing community software.
+The tested combination is reMarkable 2 software 3.27.3, Xovi 0.3.3, and AppLoad
+0.5.3. Other versions may need adjustments.
+
+### Prerequisites
+
+1. Install [Xovi](https://github.com/asivery/xovi) on the tablet.
+2. Install AppLoad and its `qt-resource-rebuilder` dependency by following the
+   [AppLoad documentation](https://github.com/asivery/rm-appload).
+3. On the computer, install Git, OpenSSH, and Qt 6's `rcc` resource compiler.
+4. Connect the rM2 over USB and verify SSH:
+
+   ```sh
+   ssh root@10.11.99.1 true
+   ```
+
+### Install
+
+```sh
+git clone https://github.com/kenunii/duchinese-remarkable.git
+cd duchinese-remarkable
+scripts/install-appload-rm2.sh
+```
+
+If the tablet uses an SSH alias or a Wi-Fi address, pass it explicitly:
+
+```sh
+scripts/install-appload-rm2.sh remarkable
+```
+
+If `rcc` is installed outside `PATH`, point the build at it:
+
+```sh
+RCC_BIN=/path/to/qt6/rcc scripts/install-appload-rm2.sh
+```
+
+The installer builds the resource bundle, copies it to
+`/home/root/xovi/exthome/appload/duchinese`, and restarts `xochitl`. Unlock the
+tablet, open AppLoad from the main UI, and tap **DuChinese**. Tap a Chinese word
+to show its pinyin and synthetic English meaning. Use AppLoad's top-edge gesture
+or the button at the bottom to close it.
+
+Running the same installer again updates the existing installation.
+
+### Troubleshooting
+
+- No DuChinese entry: confirm that Xovi, `qt-resource-rebuilder`, and AppLoad
+  load successfully, then restart `xochitl`.
+- SSH fails: enable USB web interface/developer access on the tablet and verify
+  that `10.11.99.1` is reachable.
+- Build cannot find `rcc`: install Qt 6 development tools or set `RCC_BIN`.
+- To inspect AppLoad startup errors:
+
+  ```sh
+  ssh root@10.11.99.1 journalctl -u xochitl -n 100 --no-pager
+  ```
+
+## Architecture
+
+The working integration lives in `packaging/appload-native`. It is a native
+AppLoad frontend rendered inside `xochitl`, so it does not compete with the
+reMarkable UI for the physical E Ink framebuffer.
+
+Build only the AppLoad package with:
+
+```sh
+scripts/build-appload-native.sh
+```
+
+The generated `manifest.json` and `resources.rcc` are written to
+`build/appload-native`.
+
+## Standalone reader probe
 
 The first native reader probe lives in `apps/reader`. It targets the official
 rM2 SDK matching software 3.27 and uses the device-provided `epaper` Qt platform
@@ -140,18 +219,6 @@ For a manual device test, copy the binary, Noto Sans SC font, and runner to a
 directory under `/home/root`, then run the runner as root. It temporarily stops
 `xochitl` and always starts it again when the reader exits.
 
-The current probe exits automatically after three minutes and contains only
-synthetic Chinese example text.
-
-The working in-UI integration lives in `packaging/appload-native`. It is a
-native AppLoad frontend rendered inside `xochitl`, so it does not compete with
-the reMarkable UI for the physical E Ink framebuffer. Build its resource bundle
-with:
-
-```sh
-scripts/build-appload-native.sh
-```
-
-Set `RCC_BIN` if the Qt resource compiler is not available on `PATH`. Copy the
-generated `manifest.json` and `resources.rcc` from `build/appload-native` into a
-dedicated directory below AppLoad's application root.
+The standalone probe exits automatically after three minutes and contains only
+synthetic Chinese example text. It is retained for low-level rendering research;
+the AppLoad frontend is the recommended installation.
