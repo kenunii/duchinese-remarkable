@@ -9,9 +9,10 @@ import (
 )
 
 const (
-	MaxMessageSize = 10 << 20
-	NewCoordinator = uint32(0xfffffffe)
-	Terminate      = uint32(0xffffffff)
+	MaxMessageSize  = 10 << 20
+	NewCoordinator  = uint32(0xfffffffe)
+	LostCoordinator = uint32(0xfffffffd)
+	Terminate       = uint32(0xffffffff)
 )
 
 type Message struct {

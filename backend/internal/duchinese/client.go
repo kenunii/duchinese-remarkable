@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -20,7 +21,10 @@ const (
 	sessionCookie = "_reader-server_session"
 )
 
-var ErrNotAuthenticated = errors.New("DuChinese session is missing or expired")
+var (
+	ErrNotAuthenticated = errors.New("DuChinese session is missing or expired")
+	ErrNoReaderData     = errors.New("lesson has no reader data")
+)
 
 type Session struct {
 	Cookie string `json:"cookie"`
@@ -30,6 +34,7 @@ type Client struct {
 	http        *http.Client
 	sessionPath string
 	session     Session
+	entitledCRD map[string]string
 }
 
 func New(sessionPath string) (*Client, error) {
@@ -44,6 +49,7 @@ func New(sessionPath string) (*Client, error) {
 			},
 		},
 		sessionPath: sessionPath,
+		entitledCRD: make(map[string]string),
 	}
 	data, err := os.ReadFile(sessionPath)
 	if errors.Is(err, os.ErrNotExist) {
@@ -98,7 +104,54 @@ func (c *Client) Course(path string) (json.RawMessage, error) {
 	return c.getJSON(u)
 }
 
-func (c *Client) OpenLesson(path string) (json.RawMessage, error) {
+func (c *Client) StudiedLessonIDs() (json.RawMessage, error) {
+	body, _, err := c.get(baseURL + "/lessons")
+	if err != nil {
+		return nil, err
+	}
+	ids, err := extractWindowJSON(body, "studiedLessonIds")
+	if err != nil || !json.Valid(ids) {
+		return nil, errors.New("studied lesson IDs not found")
+	}
+	return ids, nil
+}
+
+func (c *Client) MarkStudied(id string) error {
+	numericID, err := strconv.Atoi(id)
+	if err != nil || numericID < 1 || strconv.Itoa(numericID) != id {
+		return errors.New("invalid lesson ID")
+	}
+	page, _, err := c.get(baseURL + "/lessons")
+	if err != nil {
+		return err
+	}
+	csrfToken, err := extractMetaContent(page, "csrf-token")
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/lessons/"+id+"/studied", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Cookie", c.session.Cookie)
+	req.Header.Set("X-CSRF-Token", csrfToken)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "duchinese-remarkable/0.1")
+	res, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if err := c.rotate(res.Cookies()); err != nil {
+		return err
+	}
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return fmt.Errorf("mark studied: HTTP %d", res.StatusCode)
+	}
+	return nil
+}
+
+func (c *Client) OpenLesson(path string, persistedReaderURL ...string) (json.RawMessage, error) {
 	lessonURL, err := allowedLessonURL(path)
 	if err != nil {
 		return nil, err
@@ -118,8 +171,17 @@ func (c *Client) OpenLesson(path string) (json.RawMessage, error) {
 	if err := json.Unmarshal(lesson, &metadata); err != nil {
 		return nil, fmt.Errorf("lesson metadata shape: %w", err)
 	}
-	if metadata.Locked || metadata.CRDURL == "" {
-		return nil, errors.New("lesson is locked or has no reader data")
+	if metadata.Locked {
+		return nil, errors.New("lesson is locked")
+	}
+	if metadata.CRDURL == "" {
+		metadata.CRDURL = c.entitledCRD[lessonKey(lessonURL)]
+	}
+	if metadata.CRDURL == "" && len(persistedReaderURL) > 0 {
+		metadata.CRDURL = persistedReaderURL[0]
+	}
+	if metadata.CRDURL == "" {
+		return nil, ErrNoReaderData
 	}
 	if err := validateAssetURL(metadata.CRDURL, ".crd"); err != nil {
 		return nil, err
@@ -134,6 +196,9 @@ func (c *Client) OpenLesson(path string) (json.RawMessage, error) {
 	var out bytes.Buffer
 	out.WriteString(`{"lesson":`)
 	out.Write(lesson)
+	out.WriteString(`,"reader_url":`)
+	encodedReaderURL, _ := json.Marshal(metadata.CRDURL)
+	out.Write(encodedReaderURL)
 	out.WriteString(`,"reader":`)
 	out.Write(reader)
 	out.WriteByte('}')
@@ -148,7 +213,37 @@ func (c *Client) getJSON(rawURL string) (json.RawMessage, error) {
 	if !strings.Contains(contentType, "json") || !json.Valid(body) {
 		return nil, errors.New("server returned non-JSON data")
 	}
+	c.rememberEntitledReaders(body)
 	return body, nil
+}
+
+func (c *Client) rememberEntitledReaders(body []byte) {
+	var value any
+	if json.Unmarshal(body, &value) != nil {
+		return
+	}
+	var visit func(any)
+	visit = func(current any) {
+		switch typed := current.(type) {
+		case []any:
+			for _, item := range typed {
+				visit(item)
+			}
+		case map[string]any:
+			path, _ := typed["path"].(string)
+			crdURL, _ := typed["crd_url"].(string)
+			locked, hasLocked := typed["locked"].(bool)
+			if path != "" && crdURL != "" && hasLocked && !locked && validateAssetURL(crdURL, ".crd") == nil {
+				if allowed, err := allowedLessonURL(path); err == nil {
+					c.entitledCRD[lessonKey(allowed)] = crdURL
+				}
+			}
+			for _, item := range typed {
+				visit(item)
+			}
+		}
+	}
+	visit(value)
 }
 
 func (c *Client) get(rawURL string) ([]byte, string, error) {
@@ -235,70 +330,4 @@ func saveSession(path string, session Session) error {
 		return err
 	}
 	return os.Rename(tmpName, path)
-}
-
-func allowedLessonURL(path string) (string, error) {
-	u, err := url.Parse(path)
-	if err != nil {
-		return "", err
-	}
-	if !u.IsAbs() {
-		u, err = url.Parse(baseURL + "/" + strings.TrimLeft(path, "/"))
-		if err != nil {
-			return "", err
-		}
-	}
-	if u.Scheme != "https" || u.Host != "duchinese.net" || !strings.HasPrefix(u.Path, "/lessons/") {
-		return "", errors.New("refusing non-DuChinese lesson URL")
-	}
-	return u.String(), nil
-}
-
-func allowedCourseURL(path string) (string, error) {
-	u, err := url.Parse(path)
-	if err != nil {
-		return "", err
-	}
-	if !u.IsAbs() {
-		u, err = url.Parse(baseURL + "/" + strings.TrimLeft(path, "/"))
-		if err != nil {
-			return "", err
-		}
-	}
-	if u.Scheme != "https" || u.Host != "duchinese.net" ||
-		!strings.HasPrefix(u.Path, "/lessons/courses/") || !strings.HasSuffix(u.Path, "/lessons.json") {
-		return "", errors.New("refusing non-DuChinese course URL")
-	}
-	return u.String(), nil
-}
-
-func validateAssetURL(rawURL, suffix string) error {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return err
-	}
-	if u.Scheme != "https" || u.Host != "static.duchinese.net" || !strings.HasSuffix(u.Path, suffix) {
-		return errors.New("refusing unexpected asset URL")
-	}
-	return nil
-}
-
-func extractWindowJSON(document []byte, name string) (json.RawMessage, error) {
-	marker := []byte("window." + name)
-	start := bytes.Index(document, marker)
-	if start < 0 {
-		return nil, errors.New("window data not found")
-	}
-	start += len(marker)
-	equal := bytes.IndexByte(document[start:], '=')
-	if equal < 0 {
-		return nil, errors.New("window assignment not found")
-	}
-	data := bytes.TrimSpace(document[start+equal+1:])
-	var value json.RawMessage
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	if err := decoder.Decode(&value); err != nil {
-		return nil, err
-	}
-	return value, nil
 }

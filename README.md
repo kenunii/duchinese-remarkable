@@ -159,13 +159,13 @@ The generated file is outside the repository at
 ```sh
 git clone https://github.com/kenunii/duchinese-remarkable.git
 cd duchinese-remarkable
-scripts/install-appload-rm2.sh
+scripts/install-appload-rm2.sh --with-session
 ```
 
 If the tablet uses an SSH alias or a Wi-Fi address, pass it explicitly:
 
 ```sh
-scripts/install-appload-rm2.sh remarkable
+scripts/install-appload-rm2.sh remarkable --with-session
 ```
 
 If `rcc` is installed outside `PATH`, point the build at it:
@@ -174,14 +174,15 @@ If `rcc` is installed outside `PATH`, point the build at it:
 RCC_BIN=/path/to/qt6/rcc scripts/install-appload-rm2.sh
 ```
 
-The installer builds the resource bundle, copies it to
-`/home/root/xovi/exthome/appload/duchinese`, and restarts `xochitl`. Unlock the
-tablet, open AppLoad from the main UI, and tap **DuChinese**. Browse or search,
-open an unlocked story, and tap a Chinese word to show its pinyin, meaning, and
-sentence translation. Use AppLoad's top-edge gesture or the close button to
-leave it.
+The installer builds the resource bundle, copies it atomically to
+`/home/root/xovi/exthome/appload/duchinese`, and stops only an older DuChinese
+backend process. It does not restart `xochitl`. Unlock the tablet, open AppLoad
+from the main UI, and tap **DuChinese**. Browse or search, open an unlocked
+story, and tap a Chinese word to show its pinyin and meaning. Tap the bordered
+translation area to show or hide the selected sentence's translation.
 
-Running the same installer again updates the existing installation.
+Running the installer again updates the existing installation. The session is
+left untouched unless `--with-session` is passed explicitly.
 
 ### Troubleshooting
 

@@ -22,7 +22,6 @@ if [[ -z "$rcc_bin" ]]; then
     exit 1
 fi
 
-mkdir -p "$output_dir"
 mkdir -p "$output_dir/backend"
 cp "$source_dir/manifest.json" "$output_dir/manifest.json"
 "$rcc_bin" --binary -o "$output_dir/resources.rcc" "$source_dir/application.qrc"
