@@ -25,6 +25,7 @@ const (
 	requestMarkRead    = uint32(9)
 	requestSettings    = uint32(10)
 	requestFinishStats = uint32(11)
+	requestSaved       = uint32(12)
 
 	responseState    = uint32(101)
 	responseData     = uint32(102)
@@ -108,6 +109,9 @@ func handle(conn *appload.Connection, client *duchinese.Client, progressStore *p
 	case requestLatest:
 		payload, err := client.Latest(max(1, req.Page))
 		return sendRaw(conn, "latest", payload, err)
+	case requestSaved:
+		payload, err := client.Saved(max(1, req.Page))
+		return sendRaw(conn, "saved", payload, err)
 	case requestSearch:
 		payload, err := client.Search(req.Query, max(1, req.Page))
 		return sendRaw(conn, "search", payload, err)

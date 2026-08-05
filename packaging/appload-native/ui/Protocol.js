@@ -11,6 +11,7 @@ var studied = 8
 var markRead = 9
 var settings = 10
 var finishStats = 11
+var saved = 12
 
 var stateResponse = 101
 var dataResponse = 102

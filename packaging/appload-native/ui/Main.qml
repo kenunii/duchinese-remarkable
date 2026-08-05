@@ -128,6 +128,7 @@ Rectangle {
             (payload.lessons[0].course_title || "Course") : ""
         heading = kind === "search" ? "Search results" :
                   kind === "latest" ? "Latest stories" :
+                  kind === "saved" ? "Bookmarked" :
                   kind === "course" ? courseTitle : "Featured"
         if (kind !== "course") {
             courseContext = { path: "", title: "" }
@@ -157,6 +158,7 @@ Rectangle {
 
     function backToBooks() {
         if (booksContext.payload) showListing(booksContext.kind, booksContext.payload)
+        else send(Protocol.top, {})
     }
 
     function backFromReader() {
@@ -375,6 +377,26 @@ Rectangle {
         return /^[。！？!?，,、；;：:…）》】”’]+$/.test(text)
     }
 
+    function layoutWord(word, text) {
+        return {
+            hanzi: text,
+            tc_hanzi: text,
+            pinyin: word.pinyin || "",
+            meaning: word.meaning || ""
+        }
+    }
+
+    function measuredLayoutTokenWidth(index) {
+        var word = words[index] || {}
+        var text = String(wordText(word))
+        for (var next = index + 1; next < words.length; ++next) {
+            var following = words[next] || {}
+            if (!isClosingPunctuation(following)) break
+            text += String(wordText(following))
+        }
+        return measuredTokenWidth(layoutWord(word, text))
+    }
+
     function rebuildPagination(resumePosition) {
         var starts = [0]
         var availableWidth = Math.max(100, wordFlow.width)
@@ -400,7 +422,8 @@ Rectangle {
                 } else usedHeight += breakHeight + wordFlow.spacing
                 continue
             }
-            var tokenWidth = Math.min(availableWidth, measuredTokenWidth(word))
+            if (isClosingPunctuation(word) && pageHasWords) continue
+            var tokenWidth = Math.min(availableWidth, measuredLayoutTokenWidth(index))
             if (lineWidth > 0 && lineWidth + wordFlow.spacing + tokenWidth > availableWidth) {
                 usedHeight += rowHeight + wordFlow.spacing
                 lineWidth = 0
@@ -479,7 +502,14 @@ Rectangle {
                     word: {}
                 })
             } else {
-                items.push({ separator: false, absoluteIndex: index, word: word })
+                if (isClosingPunctuation(word) && items.length && !items[items.length - 1].separator) {
+                    var previous = items[items.length - 1]
+                    previous.word = layoutWord(previous.word,
+                        String(wordText(previous.word)) + String(wordText(word)))
+                } else {
+                    items.push({ separator: false, absoluteIndex: index,
+                                 word: layoutWord(word, String(wordText(word))) })
+                }
             }
         }
         return items
@@ -598,11 +628,16 @@ Rectangle {
         Repeater {
             model: [
                 { label: "Featured", type: Protocol.top },
-                { label: "Latest", type: Protocol.latest }
+                { label: "Latest", type: Protocol.latest },
+                { label: "Bookmarked", type: Protocol.saved }
             ]
             Rectangle {
-                width: 170; height: 68; color: "white"; border.width: 2; border.color: "black"
-                Text { anchors.centerIn: parent; text: modelData.label; font.pixelSize: 22 }
+                property bool selected: root.listingKind === (modelData.type === Protocol.top ? "top" :
+                    (modelData.type === Protocol.latest ? "latest" : "saved"))
+                width: modelData.label === "Bookmarked" ? 190 : 150
+                height: 68; color: selected ? "black" : "white"
+                border.width: 2; border.color: "black"
+                Text { anchors.centerIn: parent; text: modelData.label; color: parent.selected ? "white" : "black"; font.pixelSize: 22 }
                 MouseArea { anchors.fill: parent; onClicked: root.send(modelData.type, {}) }
             }
         }
@@ -618,7 +653,7 @@ Rectangle {
             MouseArea { anchors.fill: parent; onClicked: root.cycleLevelFilter() }
         }
         Rectangle {
-            width: navigation.width - 170 * 2 - 190 - 110 - 14 * 4; height: 68
+            width: navigation.width - 150 * 2 - 190 * 2 - 110 - 14 * 5; height: 68
             color: "white"; border.width: 2; border.color: "black"
             TextInput {
                 id: searchInput

@@ -156,6 +156,16 @@ func (c *Client) Latest(page int) (json.RawMessage, error) {
 	return c.getJSON(u.String())
 }
 
+func (c *Client) Saved(page int) (json.RawMessage, error) {
+	u, _ := url.Parse(baseURL + "/lessons/saved.json")
+	if page > 1 {
+		q := u.Query()
+		q.Set("page", fmt.Sprint(page))
+		u.RawQuery = q.Encode()
+	}
+	return c.getJSON(u.String())
+}
+
 func (c *Client) Search(query string, page int) (json.RawMessage, error) {
 	u, _ := url.Parse(baseURL + "/lessons/search.json")
 	q := u.Query()
