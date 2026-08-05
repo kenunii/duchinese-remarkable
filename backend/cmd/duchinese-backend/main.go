@@ -14,16 +14,17 @@ import (
 )
 
 const (
-	requestBootstrap = uint32(1)
-	requestTop       = uint32(2)
-	requestLatest    = uint32(3)
-	requestSearch    = uint32(4)
-	requestLesson    = uint32(5)
-	requestCourse    = uint32(6)
-	requestProgress  = uint32(7)
-	requestStudied   = uint32(8)
-	requestMarkRead  = uint32(9)
-	requestSettings  = uint32(10)
+	requestBootstrap   = uint32(1)
+	requestTop         = uint32(2)
+	requestLatest      = uint32(3)
+	requestSearch      = uint32(4)
+	requestLesson      = uint32(5)
+	requestCourse      = uint32(6)
+	requestProgress    = uint32(7)
+	requestStudied     = uint32(8)
+	requestMarkRead    = uint32(9)
+	requestSettings    = uint32(10)
+	requestFinishStats = uint32(11)
 
 	responseState    = uint32(101)
 	responseData     = uint32(102)
@@ -53,11 +54,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	client, err := duchinese.New(filepath.Join(home, ".config", "duchinese-remarkable", "session.json"))
+	configDir := filepath.Join(home, ".config", "duchinese-remarkable")
+	client, err := duchinese.New(
+		filepath.Join(configDir, "session.json"),
+		filepath.Join(configDir, "mobile-session.json"),
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
-	progressStore, err := progress.Open(filepath.Join(home, ".config", "duchinese-remarkable", "progress.json"))
+	progressStore, err := progress.Open(filepath.Join(configDir, "progress.json"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -93,7 +98,10 @@ func handle(conn *appload.Connection, client *duchinese.Client, progressStore *p
 	}
 	switch message.Type {
 	case requestBootstrap:
-		return sendJSON(conn, responseState, map[string]any{"authenticated": client.Ready(), "progress": progressStore.State()})
+		return sendJSON(conn, responseState, map[string]any{
+			"authenticated": client.Ready(), "mobile_authenticated": client.MobileReady(),
+			"progress": progressStore.State(),
+		})
 	case requestTop:
 		payload, err := client.Top()
 		return sendRaw(conn, "top", payload, err)
@@ -159,6 +167,13 @@ func handle(conn *appload.Connection, client *duchinese.Client, progressStore *p
 			return err
 		}
 		return sendJSON(conn, responseProgress, state)
+	case requestFinishStats:
+		ids := progressStore.RecentCompletedIDs(3)
+		if len(ids) == 0 && req.ID != "" {
+			ids = []string{req.ID}
+		}
+		payload, err := client.FinishedReadingStats(ids)
+		return sendRaw(conn, "finish_stats", payload, err)
 	default:
 		return errors.New("unknown request")
 	}

@@ -156,16 +156,27 @@ scripts/import-session-from-har.py /path/to/duchinese.har
 The generated file is outside the repository at
 `~/.config/duchinese-remarkable/session.json`. Then build and install:
 
+For DuChinese's real end-of-chapter word statistics, create a separate mobile
+API session. The password is read interactively and is never stored:
+
+```sh
+scripts/login-mobile.py
+```
+
+This writes only the mobile device UUID and token to
+`~/.config/duchinese-remarkable/mobile-session.json` with mode `0600`.
+Transfer both sessions during the first install:
+
 ```sh
 git clone https://github.com/kenunii/duchinese-remarkable.git
 cd duchinese-remarkable
-scripts/install-appload-rm2.sh --with-session
+scripts/install-appload-rm2.sh --with-session --with-mobile-session
 ```
 
 If the tablet uses an SSH alias or a Wi-Fi address, pass it explicitly:
 
 ```sh
-scripts/install-appload-rm2.sh remarkable --with-session
+scripts/install-appload-rm2.sh remarkable --with-session --with-mobile-session
 ```
 
 If `rcc` is installed outside `PATH`, point the build at it:
@@ -182,7 +193,9 @@ story, and tap a Chinese word to show its pinyin and meaning. Tap the bordered
 translation area to show or hide the selected sentence's translation.
 
 Running the installer again updates the existing installation. The session is
-left untouched unless `--with-session` is passed explicitly.
+left untouched unless `--with-session` or `--with-mobile-session` is passed
+explicitly. Finishing a chapter shows DuChinese's real new/learned word counts,
+recent progress chart, and word lists when the mobile session is installed.
 
 ### Troubleshooting
 

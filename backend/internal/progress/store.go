@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 )
 
@@ -80,6 +81,27 @@ func (s *Store) Update(entry Entry) (State, error) {
 func (s *Store) Entry(path string) (Entry, bool) {
 	entry, ok := s.state.Entries[path]
 	return entry, ok
+}
+
+func (s *Store) RecentCompletedIDs(limit int) []string {
+	entries := make([]Entry, 0, len(s.state.Entries))
+	for _, entry := range s.state.Entries {
+		if entry.Completed && entry.ID != "" {
+			entries = append(entries, entry)
+		}
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].UpdatedAt > entries[j].UpdatedAt })
+	if limit > len(entries) {
+		limit = len(entries)
+	}
+	if limit < 0 {
+		limit = 0
+	}
+	ids := make([]string, limit)
+	for i := 0; i < limit; i++ {
+		ids[limit-1-i] = entries[i].ID
+	}
+	return ids
 }
 
 func (s *Store) RememberReader(path, readerURL string) error {

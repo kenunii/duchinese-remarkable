@@ -10,6 +10,7 @@ var progress = 7
 var studied = 8
 var markRead = 9
 var settings = 10
+var finishStats = 11
 
 var stateResponse = 101
 var dataResponse = 102

@@ -17,6 +17,7 @@ import (
 
 const (
 	baseURL       = "https://duchinese.net"
+	mobileAPIURL  = "https://api.duchinese.app/api/v2"
 	maxBodyBytes  = 10 << 20
 	sessionCookie = "_reader-server_session"
 )
@@ -30,14 +31,20 @@ type Session struct {
 	Cookie string `json:"cookie"`
 }
 
+type MobileSession struct {
+	UUID  string `json:"uuid"`
+	Token string `json:"token"`
+}
+
 type Client struct {
 	http        *http.Client
 	sessionPath string
 	session     Session
+	mobile      MobileSession
 	entitledCRD map[string]string
 }
 
-func New(sessionPath string) (*Client, error) {
+func New(sessionPath string, mobileSessionPath ...string) (*Client, error) {
 	c := &Client{
 		http: &http.Client{
 			Timeout: 30 * time.Second,
@@ -64,11 +71,75 @@ func New(sessionPath string) (*Client, error) {
 	if !strings.HasPrefix(c.session.Cookie, sessionCookie+"=") {
 		return nil, errors.New("session file has no DuChinese session cookie")
 	}
+	if len(mobileSessionPath) > 0 {
+		data, err := os.ReadFile(mobileSessionPath[0])
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("read mobile session: %w", err)
+		}
+		if err == nil {
+			if err := json.Unmarshal(data, &c.mobile); err != nil {
+				return nil, fmt.Errorf("parse mobile session: %w", err)
+			}
+			if c.mobile.UUID == "" || c.mobile.Token == "" {
+				return nil, errors.New("mobile session has no UUID or token")
+			}
+		}
+	}
 	return c, nil
 }
 
 func (c *Client) Ready() bool {
 	return c.session.Cookie != ""
+}
+
+func (c *Client) MobileReady() bool {
+	return c.mobile.UUID != "" && c.mobile.Token != ""
+}
+
+func (c *Client) FinishedReadingStats(ids []string) (json.RawMessage, error) {
+	if !c.MobileReady() {
+		return nil, errors.New("mobile login required for reading statistics")
+	}
+	if len(ids) == 0 || len(ids) > 3 {
+		return nil, errors.New("reading statistics require one to three lesson IDs")
+	}
+	for _, id := range ids {
+		numericID, err := strconv.Atoi(id)
+		if err != nil || numericID < 1 || strconv.Itoa(numericID) != id {
+			return nil, errors.New("invalid lesson ID")
+		}
+	}
+	u, _ := url.Parse(mobileAPIURL + "/statistics/finished_reading_chart_data")
+	query := u.Query()
+	query.Set("user[uuid]", c.mobile.UUID)
+	query.Set("user[token]", c.mobile.Token)
+	query.Set("read_document_ids", strings.Join(ids, ","))
+	u.RawQuery = query.Encode()
+	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "duchinese-remarkable/0.1")
+	res, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode == http.StatusUnauthorized {
+		return nil, errors.New("mobile login expired")
+	}
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return nil, fmt.Errorf("reading statistics: HTTP %d", res.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(res.Body, maxBodyBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > maxBodyBytes || !json.Valid(body) {
+		return nil, errors.New("invalid reading statistics response")
+	}
+	return body, nil
 }
 
 func (c *Client) Top() (json.RawMessage, error) {

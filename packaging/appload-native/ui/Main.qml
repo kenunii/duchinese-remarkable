@@ -38,6 +38,11 @@ Rectangle {
     property var readingProgress: ({ entries: {} })
     property var remoteStudied: ({})
     property var activeLesson: null
+    property bool mobileAuthenticated: false
+    property var finishStats: ({ chart_data: [], new_words: [], learned_words: [], new_count: 0, learned_count: 0 })
+    property var finishWordList: []
+    property string finishWordTitle: ""
+    property int lessonCharacterCount: 0
     readonly property var levelFilters: ["", "newbie", "elementary", "intermediate", "upper intermediate", "advanced", "master"]
 
     FontLoader { id: chineseFont; source: "qrc:/fonts/NotoSansSC.ttf" }
@@ -197,6 +202,14 @@ Rectangle {
         words = reader.words || []
         sentenceEnds = reader.sentence_indices || []
         translations = reader.sentence_translations || []
+        lessonCharacterCount = Number(lesson.character_count || lesson.characters_count || 0)
+        if (!lessonCharacterCount) {
+            var characterText = ""
+            for (var characterIndex = 0; characterIndex < words.length; ++characterIndex)
+                characterText += root.wordText(words[characterIndex])
+            var characters = characterText.match(/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/g)
+            lessonCharacterCount = characters ? characters.length : 0
+        }
         var bookTitle = (activeLesson && activeLesson.courseTitle) || lesson.course_title || ""
         var chapterTitle = lesson.title || (activeLesson && activeLesson.title) || ""
         heading = bookTitle || chapterTitle || "Story"
@@ -238,6 +251,49 @@ Rectangle {
         sendBackground(Protocol.markRead, { id: activeLesson.id })
     }
 
+    function finishReading() {
+        if (!activeLesson) return
+        saveProgress(true)
+        markRemoteRead()
+        if (mobileAuthenticated) {
+            send(Protocol.finishStats, { id: activeLesson.id || "" })
+        } else {
+            finishStats = { chart_data: [], new_words: [], learned_words: [], new_count: -1, learned_count: -1 }
+            heading = "Great Job!"
+            screen = "finish"
+            statusText = "Mobile login required for word statistics"
+        }
+    }
+
+    function showFinishWords(title, wordsToShow) {
+        finishWordTitle = title
+        finishWordList = wordsToShow || []
+        heading = title
+        screen = "finish_words"
+        statusText = finishWordList.length ? "" : "No words in this category"
+    }
+
+    function finishSeriesValue(key, index) {
+        var points = finishStats.chart_data || []
+        if (!points.length) return 0
+        var safeIndex = Math.max(0, Math.min(index, points.length - 1))
+        return Number(points[safeIndex][key] || 0)
+    }
+
+    function finishSeriesDelta(key) {
+        var points = finishStats.chart_data || []
+        if (points.length < 2) return 0
+        return finishSeriesValue(key, points.length - 1) - finishSeriesValue(key, points.length - 2)
+    }
+
+    function signedNumber(value) { return value > 0 ? "+" + value : String(value) }
+
+    function backFromFinish() {
+        if (readerReturn.coursePath) send(Protocol.course, { path: readerReturn.coursePath })
+        else if (readerReturn.payload) showListing(readerReturn.kind, readerReturn.payload)
+        else send(Protocol.top, {})
+    }
+
     function continueReading() {
         if (!readingProgress.last) return
         var last = readingProgress.last
@@ -259,6 +315,7 @@ Rectangle {
             readingProgress = data.progress || { entries: {} }
             levelFilter = levelFilters.indexOf(readingProgress.level_filter) >= 0 ?
                 readingProgress.level_filter : ""
+            mobileAuthenticated = data.mobile_authenticated === true
             if (data.authenticated) {
                 send(Protocol.top, {})
                 sendBackground(Protocol.studied, {})
@@ -266,6 +323,14 @@ Rectangle {
             else statusText = "Login required — import your browser session and reinstall"
         } else if (type === Protocol.dataResponse) {
             if (data.kind === "lesson") { busy = false; showLesson(data.payload) }
+            else if (data.kind === "finish_stats") {
+                busy = false
+                finishStats = data.payload || finishStats
+                heading = "Great Job!"
+                screen = "finish"
+                statusText = ""
+                Qt.callLater(function() { finishChart.requestPaint() })
+            }
             else if (data.kind === "studied") {
                 var studied = {}
                 for (var studiedIndex = 0; studiedIndex < data.payload.length; ++studiedIndex)
@@ -290,7 +355,7 @@ Rectangle {
         }
     }
 
-    function wordText(word) { return word.tc_hanzi || word.hanzi || "" }
+    function wordText(word) { return word.hanzi || word.tc_hanzi || "" }
     function isSelectableWord(word) {
         return /[A-Za-z0-9\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/.test(String(wordText(word)))
     }
@@ -374,6 +439,7 @@ Rectangle {
 
     function turnPage(direction) {
         selectedWord = -1
+        if (direction > 0 && isLastPage()) { finishReading(); return }
         if (direction > 0 && !isLastPage()) page++
         else if (direction < 0 && page > 0) page--
         else if (direction < 0) return
@@ -466,10 +532,24 @@ Rectangle {
             MouseArea { anchors.fill: parent; onClicked: root.backToBooks() }
         }
 
+        Rectangle {
+            id: finishWordsBackButton
+            visible: root.screen === "finish_words"
+            anchors.left: parent.left; anchors.leftMargin: 30
+            anchors.verticalCenter: parent.verticalCenter
+            width: 118; height: 66
+            color: "white"; border.width: 2; border.color: "black"
+            Text { anchors.centerIn: parent; text: "‹ Back"; font.pixelSize: 22 }
+            MouseArea {
+                anchors.fill: parent
+                onClicked: { root.heading = "Great Job!"; root.screen = "finish"; root.statusText = "" }
+            }
+        }
+
         Text {
             visible: root.screen !== "reader"
             anchors.left: parent.left
-            anchors.leftMargin: booksBackButton.visible ? 194 : 44
+            anchors.leftMargin: booksBackButton.visible ? 194 : (finishWordsBackButton.visible ? 176 : 44)
             anchors.verticalCenter: parent.verticalCenter
             width: parent.width - 360
             text: root.heading
@@ -763,6 +843,212 @@ Rectangle {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    Flickable {
+        id: finishView
+        visible: root.screen === "finish"
+        anchors.top: toolbar.bottom; anchors.bottom: status.top
+        anchors.left: parent.left; anchors.right: parent.right
+        contentWidth: width; contentHeight: finishContent.height + 60
+        clip: true
+
+        Column {
+            id: finishContent
+            width: Math.min(parent.width - 96, 1040)
+            x: (parent.width - width) / 2
+            y: 34
+            spacing: 20
+
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: 116; height: 116; radius: 58
+                color: "black"
+                Text {
+                    anchors.centerIn: parent; text: "✓"; color: "white"
+                    font.pixelSize: 72; font.bold: true
+                }
+            }
+            Text {
+                width: parent.width; horizontalAlignment: Text.AlignHCenter
+                text: "Great Job!"; font.pixelSize: 48; font.bold: true
+            }
+            Text {
+                width: parent.width; horizontalAlignment: Text.AlignHCenter
+                text: "You finished reading this " + root.lessonCharacterCount + " characters long chapter."
+                font.pixelSize: 25; wrapMode: Text.Wrap
+            }
+            Text {
+                width: parent.width; horizontalAlignment: Text.AlignHCenter
+                text: "Here’s your word progress:"; font.pixelSize: 27
+            }
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: parent.width; height: 390
+                color: "white"; border.width: 2; border.color: "black"
+                Row {
+                    id: chartSummary
+                    anchors.top: parent.top; anchors.topMargin: 18
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 70
+                    Repeater {
+                        model: [
+                            { label: "New", key: "new", shade: "#111111" },
+                            { label: "Learned", key: "learned", shade: "#777777" }
+                        ]
+                        Row {
+                            spacing: 12
+                            Rectangle { width: 28; height: 28; radius: 14; color: modelData.shade }
+                            Text {
+                                text: modelData.label + "  " +
+                                      root.finishSeriesValue(modelData.key, (root.finishStats.chart_data || []).length - 1) +
+                                      "  (" + root.signedNumber(root.finishSeriesDelta(modelData.key)) + ")"
+                                font.pixelSize: 23; font.bold: true
+                            }
+                        }
+                    }
+                }
+                Canvas {
+                    id: finishChart
+                    anchors.left: parent.left; anchors.right: parent.right
+                    anchors.top: chartSummary.bottom; anchors.bottom: parent.bottom
+                    anchors.leftMargin: 24; anchors.rightMargin: 24
+                    anchors.topMargin: 10; anchors.bottomMargin: 18
+                    onPaint: {
+                        var ctx = getContext("2d")
+                        ctx.clearRect(0, 0, width, height)
+                        var points = root.finishStats.chart_data || []
+                        if (!points.length) return
+                        var left = 120
+                        var right = width - 34
+                        var bandHeight = (height - 42) / 2
+                        function drawSeries(key, label, shade, band) {
+                            var minimum = Number(points[0][key] || 0)
+                            var maximum = minimum
+                            for (var i = 1; i < points.length; ++i) {
+                                minimum = Math.min(minimum, Number(points[i][key] || 0))
+                                maximum = Math.max(maximum, Number(points[i][key] || 0))
+                            }
+                            var spread = Math.max(2, maximum - minimum)
+                            minimum -= Math.max(1, Math.ceil(spread * 0.35))
+                            maximum += Math.max(1, Math.ceil(spread * 0.35))
+                            var top = band * bandHeight + 16
+                            var bottom = top + bandHeight - 34
+                            ctx.fillStyle = band === 0 ? "#f4f4f4" : "#e8e8e8"
+                            ctx.fillRect(left, top, right - left, bottom - top)
+                            ctx.strokeStyle = "#bbbbbb"; ctx.lineWidth = 1
+                            for (var grid = 0; grid <= 2; ++grid) {
+                                var gridY = top + grid * (bottom - top) / 2
+                                ctx.beginPath(); ctx.moveTo(left, gridY); ctx.lineTo(right, gridY); ctx.stroke()
+                            }
+                            ctx.fillStyle = shade; ctx.font = "bold 21px sans-serif"; ctx.textAlign = "left"
+                            ctx.fillText(label, 4, top + 24)
+                            ctx.strokeStyle = shade
+                            ctx.fillStyle = shade
+                            ctx.lineWidth = 6
+                            ctx.beginPath()
+                            for (var j = 0; j < points.length; ++j) {
+                                var x = points.length === 1 ? (left + right) / 2 : left + j * (right - left) / (points.length - 1)
+                                var y = bottom - (Number(points[j][key] || 0) - minimum) * (bottom - top) / (maximum - minimum)
+                                if (j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+                            }
+                            ctx.stroke()
+                            for (var k = 0; k < points.length; ++k) {
+                                var px = points.length === 1 ? (left + right) / 2 : left + k * (right - left) / (points.length - 1)
+                                var py = bottom - (Number(points[k][key] || 0) - minimum) * (bottom - top) / (maximum - minimum)
+                                ctx.beginPath(); ctx.arc(px, py, 8, 0, Math.PI * 2); ctx.fill()
+                                ctx.font = "bold 19px sans-serif"; ctx.textAlign = "center"
+                                ctx.fillText(String(points[k][key] || 0), px, Math.max(top + 20, py - 13))
+                            }
+                        }
+                        drawSeries("new", "New", "#111111", 0)
+                        drawSeries("learned", "Learned", "#777777", 1)
+                        ctx.fillStyle = "#444444"; ctx.font = "17px sans-serif"; ctx.textAlign = "center"
+                        for (var labelIndex = 0; labelIndex < points.length; ++labelIndex) {
+                            var labelX = points.length === 1 ? (left + right) / 2 : left + labelIndex * (right - left) / (points.length - 1)
+                            ctx.fillText(labelIndex === points.length - 1 ? "Latest" : "Previous", labelX, height - 2)
+                        }
+                    }
+                    Text {
+                        visible: !(root.finishStats.chart_data || []).length
+                        anchors.centerIn: parent
+                        text: root.mobileAuthenticated ? "No chart data" : "Mobile login required"
+                        font.pixelSize: 23; color: "#555"
+                    }
+                }
+            }
+            Row {
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: 28
+                Repeater {
+                    model: [
+                        { title: "New Words", subtitle: "Read less than ten times", count: root.finishStats.new_count,
+                          words: root.finishStats.new_words || [] },
+                        { title: "Learned Words", subtitle: "Read ten times or more", count: root.finishStats.learned_count,
+                          words: root.finishStats.learned_words || [] }
+                    ]
+                    Rectangle {
+                        width: (finishContent.width - 28) / 2; height: 154
+                        color: "white"; border.width: 2; border.color: "black"
+                        Column {
+                            anchors.centerIn: parent; spacing: 6
+                            Text { anchors.horizontalCenter: parent.horizontalCenter; text: modelData.title; font.pixelSize: 27; font.bold: true }
+                            Text { anchors.horizontalCenter: parent.horizontalCenter; text: modelData.subtitle; font.pixelSize: 18; color: "#444" }
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: Number(modelData.count) < 0 ? "—" : "+" + modelData.count + "  ›"
+                                font.pixelSize: 35; font.bold: true
+                            }
+                        }
+                        MouseArea {
+                            anchors.fill: parent; enabled: Number(modelData.count) >= 0
+                            onClicked: root.showFinishWords(modelData.title, modelData.words)
+                        }
+                    }
+                }
+            }
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: Math.min(parent.width, 700); height: 72
+                color: "black"
+                Text { anchors.centerIn: parent; text: root.readerReturn.coursePath ? "Next Chapter" : "Finish"; color: "white"; font.pixelSize: 28 }
+                MouseArea { anchors.fill: parent; onClicked: root.backFromFinish() }
+            }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "Go back"; font.pixelSize: 22; font.underline: true
+                MouseArea { anchors.fill: parent; anchors.margins: -18; onClicked: root.backFromFinish() }
+            }
+        }
+    }
+
+    ListView {
+        id: finishWordsView
+        visible: root.screen === "finish_words"
+        anchors.top: toolbar.bottom; anchors.bottom: status.top
+        anchors.left: parent.left; anchors.right: parent.right
+        anchors.margins: 38; spacing: 10; clip: true
+        model: root.finishWordList
+        delegate: Rectangle {
+            width: finishWordsView.width
+            height: Math.max(126, meaningText.y + meaningText.implicitHeight + 20)
+            color: "white"; border.width: 2; border.color: "black"
+            Text {
+                x: 22; y: 13; width: parent.width - 44
+                text: modelData.sc_hanzi || modelData.hanzi || modelData.tc_hanzi || ""
+                font.family: chineseFont.name; font.pixelSize: 34; font.bold: true
+            }
+            Text {
+                x: 22; y: 55; width: parent.width - 44
+                text: modelData.pinyin || ""; font.pixelSize: 20; color: "#444"
+            }
+            Text {
+                id: meaningText
+                x: 22; y: 82; width: parent.width - 44
+                text: modelData.meaning || ""; font.pixelSize: 23
+                wrapMode: Text.Wrap; lineHeight: 1.08
             }
         }
     }

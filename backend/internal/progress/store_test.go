@@ -66,3 +66,20 @@ func TestProgressRoundTrip(t *testing.T) {
 		t.Fatalf("progress mode is %o, want 600", info.Mode().Perm())
 	}
 }
+
+func TestRecentCompletedIDsAreChronological(t *testing.T) {
+	store := &Store{state: State{Entries: map[string]Entry{
+		"one":   {ID: "1", Completed: true, UpdatedAt: "2026-01-01T10:00:00Z"},
+		"two":   {ID: "2", Completed: true, UpdatedAt: "2026-01-02T10:00:00Z"},
+		"three": {ID: "3", Completed: true, UpdatedAt: "2026-01-03T10:00:00Z"},
+		"four":  {ID: "4", Completed: true, UpdatedAt: "2026-01-04T10:00:00Z"},
+		"open":  {ID: "5", Completed: false, UpdatedAt: "2026-01-05T10:00:00Z"},
+	}}}
+	got := store.RecentCompletedIDs(3)
+	want := []string{"2", "3", "4"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("RecentCompletedIDs() = %v, want %v", got, want)
+		}
+	}
+}
