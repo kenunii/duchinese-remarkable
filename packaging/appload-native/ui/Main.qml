@@ -294,6 +294,7 @@ Rectangle {
     function isSelectableWord(word) {
         return /[A-Za-z0-9\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/.test(String(wordText(word)))
     }
+    function tokenPadding(word) { return isSelectableWord(word) ? 14 : 0 }
     function measuredTokenWidth(word) {
         hanziMeasure.text = wordText(word)
         var width = hanziMeasure.implicitWidth
@@ -301,7 +302,7 @@ Rectangle {
             pinyinMeasure.text = word.pinyin || " "
             width = Math.max(width, pinyinMeasure.implicitWidth)
         }
-        return width + 14
+        return width + tokenPadding(word)
     }
 
     function isClosingPunctuation(word) {
@@ -684,14 +685,14 @@ Rectangle {
         anchors.left: parent.left; anchors.leftMargin: 48
         anchors.right: parent.right; anchors.rightMargin: 48
         height: root.height - 500
-        spacing: 5
+        spacing: 0
 
         Repeater {
             model: root.pageItems()
             Rectangle {
                 property int absoluteIndex: modelData.absoluteIndex
                 property bool separator: modelData.separator
-                width: separator ? wordFlow.width : tokenColumn.width + 14
+                width: separator ? wordFlow.width : tokenColumn.width + root.tokenPadding(modelData.word)
                 height: separator ? (modelData.titleBreak ? 32 : 18) : (root.showPinyin ? 84 : 65)
                 color: !separator && root.isSelectableWord(modelData.word) &&
                        root.selectedWord === absoluteIndex ? "#dddddd" : "white"
