@@ -24,6 +24,7 @@ fi
 
 mkdir -p "$output_dir/backend"
 cp "$source_dir/manifest.json" "$output_dir/manifest.json"
+cp "$source_dir/icon.png" "$output_dir/icon.png"
 "$rcc_bin" --binary -o "$output_dir/resources.rcc" "$source_dir/application.qrc"
 (
     cd "$project_root/backend"

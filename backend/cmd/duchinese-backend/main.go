@@ -172,8 +172,16 @@ func handle(conn *appload.Connection, client *duchinese.Client, progressStore *p
 		}
 		return sendJSON(conn, responseProgress, state)
 	case requestFinishStats:
+		if req.ID == "" {
+			return errors.New("reading statistics require a lesson ID")
+		}
+		if !req.Completed {
+			if err := client.MarkStudied(req.ID); err != nil {
+				return err
+			}
+		}
 		ids := progressStore.RecentCompletedIDs(3)
-		if len(ids) == 0 && req.ID != "" {
+		if len(ids) == 0 {
 			ids = []string{req.ID}
 		}
 		payload, err := client.FinishedReadingStats(ids)

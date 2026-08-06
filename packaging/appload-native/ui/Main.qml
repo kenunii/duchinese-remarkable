@@ -38,6 +38,7 @@ Rectangle {
     property var readingProgress: ({ entries: {} })
     property var remoteStudied: ({})
     property var activeLesson: null
+    property var pendingContinue: null
     property bool mobileAuthenticated: false
     property var finishStats: ({ chart_data: [], new_words: [], learned_words: [], new_count: 0, learned_count: 0 })
     property var finishWordList: []
@@ -137,23 +138,38 @@ Rectangle {
         screen = "library"
     }
 
-    function openItem(isCourse, path, title, level, id, chapterLabel) {
-        if (isCourse) {
-            booksContext = { payload: listingPayload, kind: listingKind }
-            courseContext = { path: path, title: title }
+    function lessonAt(index) {
+        if (index < 0 || index >= lessonModel.count) return null
+        var item = lessonModel.get(index)
+        if (item.itemCourse || item.itemLocked) return null
+        return { path: item.itemPath, title: item.itemRawTitle, level: item.itemLevel,
+                 id: item.itemID, chapterLabel: item.itemChapterLabel, listIndex: index }
+    }
+
+    function openLesson(lesson) {
+        if (!lesson) return
+        var inCourse = listingKind === "course"
+        readerReturn = { payload: listingPayload, kind: listingKind,
+                         coursePath: inCourse ? courseContext.path : "" }
+        activeLesson = {
+            path: lesson.path, title: lesson.title, level: lesson.level || "",
+            id: lesson.id || "", coursePath: readerReturn.coursePath,
+            courseTitle: inCourse ? courseContext.title : (lesson.courseTitle || ""),
+            chapterLabel: lesson.chapterLabel || "",
+            next: inCourse ? lessonAt(Number(lesson.listIndex) + 1) : null
         }
+        send(Protocol.lesson, { path: lesson.path })
+    }
+
+    function openItem(isCourse, path, title, level, id, chapterLabel, listIndex) {
         if (!isCourse) {
-            readerReturn = {
-                payload: listingPayload,
-                kind: listingKind,
-                coursePath: listingKind === "course" ? courseContext.path : ""
-            }
-            activeLesson = { path: path, title: title, level: level, id: id,
-                             coursePath: readerReturn.coursePath,
-                             courseTitle: courseContext.title,
-                             chapterLabel: chapterLabel || "" }
+            openLesson({ path: path, title: title, level: level, id: id,
+                         chapterLabel: chapterLabel, listIndex: listIndex })
+            return
         }
-        send(isCourse ? Protocol.course : Protocol.lesson, { path: path })
+        booksContext = { payload: listingPayload, kind: listingKind }
+        courseContext = { path: path, title: title }
+        send(Protocol.course, { path: path })
     }
 
     function backToBooks() {
@@ -227,7 +243,7 @@ Rectangle {
         statusText = words.length ? "" : "This story contains no words"
         Qt.callLater(function() {
             rebuildPagination(resumePosition)
-            saveProgress(words.length > 0 && isLastPage())
+            saveProgress(false)
         })
     }
 
@@ -248,23 +264,25 @@ Rectangle {
         })
     }
 
-    function markRemoteRead() {
-        if (!activeLesson || !activeLesson.id || remoteStudied[activeLesson.id] === true) return
-        sendBackground(Protocol.markRead, { id: activeLesson.id })
-    }
-
     function finishReading() {
         if (!activeLesson) return
         saveProgress(true)
-        markRemoteRead()
+        var wasAlreadyStudied = activeLesson.id && remoteStudied[String(activeLesson.id)] === true
         if (mobileAuthenticated) {
-            send(Protocol.finishStats, { id: activeLesson.id || "" })
+            send(Protocol.finishStats, { id: activeLesson.id || "", completed: wasAlreadyStudied })
         } else {
+            if (!wasAlreadyStudied && activeLesson.id)
+                sendBackground(Protocol.markRead, { id: activeLesson.id })
             finishStats = { chart_data: [], new_words: [], learned_words: [], new_count: -1, learned_count: -1 }
             heading = "Great Job!"
             screen = "finish"
             statusText = "Mobile login required for word statistics"
         }
+    }
+
+    function openNextChapter() {
+        if (!activeLesson || !activeLesson.next) { backFromFinish(); return }
+        openLesson(activeLesson.next)
     }
 
     function showFinishWords(title, wordsToShow) {
@@ -299,13 +317,35 @@ Rectangle {
     function continueReading() {
         if (!readingProgress.last) return
         var last = readingProgress.last
+        if (last.course_path) {
+            pendingContinue = last
+            booksContext = { payload: listingPayload, kind: listingKind }
+            courseContext = { path: last.course_path, title: last.course_title || "" }
+            send(Protocol.course, { path: last.course_path })
+            return
+        }
         readerReturn = { payload: listingPayload, kind: listingKind,
                          coursePath: last.course_path || "" }
-        activeLesson = { path: last.path, title: last.title, level: last.level || "",
-                         id: last.id || "", coursePath: last.course_path || "",
-                         courseTitle: last.course_title || "",
-                         chapterLabel: last.chapter_label || "" }
-        send(Protocol.lesson, { path: last.path })
+        openLesson({ path: last.path, title: last.title, level: last.level,
+                     id: last.id, courseTitle: last.course_title,
+                     chapterLabel: last.chapter_label, listIndex: -1 })
+    }
+
+    function continueFromCourse(payload) {
+        var last = pendingContinue
+        pendingContinue = null
+        showListing("course", payload)
+        for (var index = 0; index < lessonModel.count; ++index) {
+            var item = lessonModel.get(index)
+            if (String(item.itemPath) === String(last.path) ||
+                    (last.id && String(item.itemID) === String(last.id))) {
+                openLesson(lessonAt(index))
+                return
+            }
+        }
+        openLesson({ path: last.path, title: last.title, level: last.level,
+                     id: last.id, courseTitle: last.course_title,
+                     chapterLabel: last.chapter_label, listIndex: -1 })
     }
 
     function receive(type, contents) {
@@ -325,8 +365,18 @@ Rectangle {
             else statusText = "Login required — import your browser session and reinstall"
         } else if (type === Protocol.dataResponse) {
             if (data.kind === "lesson") { busy = false; showLesson(data.payload) }
+            else if (data.kind === "course" && pendingContinue) {
+                busy = false
+                continueFromCourse(data.payload)
+            }
             else if (data.kind === "finish_stats") {
                 busy = false
+                if (activeLesson && activeLesson.id) {
+                    var finishedStudied = {}
+                    for (var finishedID in remoteStudied) finishedStudied[finishedID] = remoteStudied[finishedID]
+                    finishedStudied[String(activeLesson.id)] = true
+                    remoteStudied = finishedStudied
+                }
                 finishStats = data.payload || finishStats
                 heading = "Great Job!"
                 screen = "finish"
@@ -343,6 +393,7 @@ Rectangle {
             else { busy = false; showListing(data.kind, data.payload) }
         } else if (type === Protocol.errorResponse) {
             busy = false
+            pendingContinue = null
             statusText = data.message || "Request failed"
         } else if (type === Protocol.progressResponse) {
             if (data.studied_id) {
@@ -466,9 +517,7 @@ Rectangle {
         if (direction > 0 && !isLastPage()) page++
         else if (direction < 0 && page > 0) page--
         else if (direction < 0) return
-        var finished = isLastPage()
-        saveProgress(finished)
-        if (finished) markRemoteRead()
+        saveProgress(false)
     }
 
     function beginSwipe(x, y) {
@@ -751,7 +800,7 @@ Rectangle {
                 anchors.fill: parent
                 enabled: !itemLocked
                 onClicked: root.openItem(itemCourse, itemPath, itemRawTitle, itemLevel,
-                                         itemID, itemChapterLabel)
+                                         itemID, itemChapterLabel, index)
             }
         }
     }
@@ -1048,8 +1097,15 @@ Rectangle {
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: Math.min(parent.width, 700); height: 72
                 color: "black"
-                Text { anchors.centerIn: parent; text: root.readerReturn.coursePath ? "Next Chapter" : "Finish"; color: "white"; font.pixelSize: 28 }
-                MouseArea { anchors.fill: parent; onClicked: root.backFromFinish() }
+                Text {
+                    anchors.centerIn: parent
+                    text: root.activeLesson && root.activeLesson.next ? "Next Chapter" : "Finish"
+                    color: "white"; font.pixelSize: 28
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: root.activeLesson && root.activeLesson.next ? root.openNextChapter() : root.backFromFinish()
+                }
             }
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter

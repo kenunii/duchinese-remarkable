@@ -29,10 +29,12 @@ mobile_session_file=${DUCHINESE_MOBILE_SESSION_FILE:-$HOME/.config/duchinese-rem
 
 ssh "$device" "mkdir -p '$remote_dir/backend'"
 scp "$project_root/build/appload-native/manifest.json" "$device:$remote_dir/manifest.json.new"
+scp "$project_root/build/appload-native/icon.png" "$device:$remote_dir/icon.png.new"
 scp "$project_root/build/appload-native/resources.rcc" "$device:$remote_dir/resources.rcc.new"
 scp "$project_root/build/appload-native/backend/entry" "$device:$remote_dir/backend/entry.new"
 ssh "$device" "chmod 755 '$remote_dir/backend/entry.new' && \
     mv '$remote_dir/manifest.json.new' '$remote_dir/manifest.json' && \
+    mv '$remote_dir/icon.png.new' '$remote_dir/icon.png' && \
     mv '$remote_dir/resources.rcc.new' '$remote_dir/resources.rcc' && \
     mv '$remote_dir/backend/entry.new' '$remote_dir/backend/entry'"
 if $with_session && [[ -f "$session_file" ]]; then
