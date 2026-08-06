@@ -24,9 +24,11 @@ type Entry struct {
 }
 
 type State struct {
-	Last        *Entry           `json:"last,omitempty"`
-	Entries     map[string]Entry `json:"entries"`
-	LevelFilter string           `json:"level_filter,omitempty"`
+	Last           *Entry           `json:"last,omitempty"`
+	Entries        map[string]Entry `json:"entries"`
+	LevelFilter    string           `json:"level_filter,omitempty"`
+	PendingStudied []string         `json:"pending_studied,omitempty"`
+	StudiedIDs     []string         `json:"studied_ids,omitempty"`
 }
 
 type Store struct {
@@ -115,6 +117,59 @@ func (s *Store) RememberReader(path, readerURL string) error {
 func (s *Store) SetLevelFilter(level string) (State, error) {
 	s.state.LevelFilter = level
 	return s.state, s.save()
+}
+
+func (s *Store) QueueStudied(id string) error {
+	if id == "" {
+		return nil
+	}
+	for _, pending := range s.state.PendingStudied {
+		if pending == id {
+			return nil
+		}
+	}
+	s.state.PendingStudied = append(s.state.PendingStudied, id)
+	return s.save()
+}
+
+func (s *Store) PendingStudiedIDs() []string {
+	return append([]string(nil), s.state.PendingStudied...)
+}
+
+func (s *Store) ResolveStudied(id string) error {
+	pending := s.state.PendingStudied[:0]
+	for _, queued := range s.state.PendingStudied {
+		if queued != id {
+			pending = append(pending, queued)
+		}
+	}
+	if len(pending) == len(s.state.PendingStudied) {
+		return nil
+	}
+	s.state.PendingStudied = pending
+	return s.save()
+}
+
+func (s *Store) SetStudiedIDs(ids []string) error {
+	seen := make(map[string]bool, len(ids))
+	s.state.StudiedIDs = s.state.StudiedIDs[:0]
+	for _, id := range ids {
+		if id != "" && !seen[id] {
+			s.state.StudiedIDs = append(s.state.StudiedIDs, id)
+			seen[id] = true
+		}
+	}
+	return s.save()
+}
+
+func (s *Store) RememberStudied(id string) error {
+	for _, studied := range s.state.StudiedIDs {
+		if studied == id {
+			return nil
+		}
+	}
+	s.state.StudiedIDs = append(s.state.StudiedIDs, id)
+	return s.save()
 }
 
 func (s *Store) save() error {

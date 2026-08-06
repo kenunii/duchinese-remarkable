@@ -41,10 +41,11 @@ type Client struct {
 	sessionPath string
 	session     Session
 	mobile      MobileSession
+	cacheDir    string
 	entitledCRD map[string]string
 }
 
-func New(sessionPath string, mobileSessionPath ...string) (*Client, error) {
+func New(sessionPath string, additionalPaths ...string) (*Client, error) {
 	c := &Client{
 		http: &http.Client{
 			Timeout: 30 * time.Second,
@@ -56,6 +57,7 @@ func New(sessionPath string, mobileSessionPath ...string) (*Client, error) {
 			},
 		},
 		sessionPath: sessionPath,
+		cacheDir:    filepath.Join(filepath.Dir(sessionPath), "cache"),
 		entitledCRD: make(map[string]string),
 	}
 	data, err := os.ReadFile(sessionPath)
@@ -71,8 +73,11 @@ func New(sessionPath string, mobileSessionPath ...string) (*Client, error) {
 	if !strings.HasPrefix(c.session.Cookie, sessionCookie+"=") {
 		return nil, errors.New("session file has no DuChinese session cookie")
 	}
-	if len(mobileSessionPath) > 0 {
-		data, err := os.ReadFile(mobileSessionPath[0])
+	if len(additionalPaths) > 1 && additionalPaths[1] != "" {
+		c.cacheDir = additionalPaths[1]
+	}
+	if len(additionalPaths) > 0 {
+		data, err := os.ReadFile(additionalPaths[0])
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("read mobile session: %w", err)
 		}
@@ -178,11 +183,63 @@ func (c *Client) Search(query string, page int) (json.RawMessage, error) {
 }
 
 func (c *Client) Course(path string) (json.RawMessage, error) {
+	if cached, err := c.cachedCourse(path); err == nil {
+		return cached, nil
+	}
+	return c.fetchCourse(path)
+}
+
+func (c *Client) fetchCourse(path string) (json.RawMessage, error) {
 	u, err := allowedCourseURL(path)
 	if err != nil {
 		return nil, err
 	}
-	return c.getJSON(u)
+	payload, requestErr := c.getJSON(u)
+	if requestErr == nil {
+		if err := c.cacheCourse(path, payload); err != nil {
+			return nil, err
+		}
+		return payload, nil
+	}
+	if cached, err := c.cachedCourse(path); err == nil {
+		return cached, nil
+	}
+	return nil, requestErr
+}
+
+func (c *Client) DownloadCourse(path string) (int, error) {
+	payload, err := c.fetchCourse(path)
+	if err != nil {
+		payload, err = c.cachedCourse(path)
+	}
+	if err != nil {
+		return 0, err
+	}
+	var course struct {
+		Lessons []struct {
+			Path   string `json:"path"`
+			Locked bool   `json:"locked"`
+		} `json:"lessons"`
+	}
+	if err := json.Unmarshal(payload, &course); err != nil {
+		return 0, fmt.Errorf("course metadata: %w", err)
+	}
+	downloaded := 0
+	var lastErr error
+	for _, lesson := range course.Lessons {
+		if lesson.Locked || lesson.Path == "" {
+			continue
+		}
+		if _, err := c.OpenLesson(lesson.Path); err != nil {
+			lastErr = err
+			continue
+		}
+		downloaded++
+	}
+	if downloaded == 0 && lastErr != nil {
+		return 0, lastErr
+	}
+	return downloaded, nil
 }
 
 func (c *Client) StudiedLessonIDs() (json.RawMessage, error) {
@@ -233,6 +290,23 @@ func (c *Client) MarkStudied(id string) error {
 }
 
 func (c *Client) OpenLesson(path string, persistedReaderURL ...string) (json.RawMessage, error) {
+	if cached, err := c.cachedLesson(path); err == nil {
+		return cached, nil
+	}
+	payload, err := c.openLessonOnline(path, persistedReaderURL...)
+	if err == nil {
+		if cacheErr := c.cacheLesson(path, payload); cacheErr != nil {
+			return nil, cacheErr
+		}
+		return payload, nil
+	}
+	if cached, cacheErr := c.cachedLesson(path); cacheErr == nil {
+		return cached, nil
+	}
+	return nil, err
+}
+
+func (c *Client) openLessonOnline(path string, persistedReaderURL ...string) (json.RawMessage, error) {
 	lessonURL, err := allowedLessonURL(path)
 	if err != nil {
 		return nil, err

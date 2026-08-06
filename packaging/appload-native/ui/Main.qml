@@ -100,6 +100,12 @@ Rectangle {
                 var savedProgress = root.readingProgress.entries ?
                     root.readingProgress.entries[String(path)] : undefined
                 var isRemoteRead = !isCourse && root.remoteStudied[String(value.id || "")] === true
+                var hasStudiedSnapshot = root.readingProgress.studied_ids !== undefined
+                var pendingStudied = root.readingProgress.pending_studied || []
+                var isPendingRead = !isCourse &&
+                    pendingStudied.indexOf(String(value.id || "")) >= 0
+                var isLegacyLocalRead = !isCourse && !hasStudiedSnapshot &&
+                    savedProgress !== undefined && savedProgress.completed === true
                 lessonModel.append({
                     itemTitle: displayTitle,
                     itemSubtitle: String(value.level || value.course_type || value.synopsis || ""),
@@ -111,7 +117,7 @@ Rectangle {
                     itemCourse: isCourse,
                     itemLocked: value.locked === true,
                     itemStarted: !isCourse && (savedProgress !== undefined || isRemoteRead),
-                    itemRead: isRemoteRead
+                    itemRead: isRemoteRead || isPendingRead || isLegacyLocalRead
                 })
             }
             if (lessonPath || value.crd_url) return
@@ -130,6 +136,7 @@ Rectangle {
         heading = kind === "search" ? "Search results" :
                   kind === "latest" ? "Latest stories" :
                   kind === "saved" ? "Bookmarked" :
+                  kind === "downloaded" ? "Downloaded" :
                   kind === "course" ? courseTitle : "Featured"
         if (kind !== "course") {
             courseContext = { path: "", title: "" }
@@ -355,12 +362,17 @@ Rectangle {
         if (type === Protocol.stateResponse) {
             busy = false
             readingProgress = data.progress || { entries: {} }
+            var cachedStudied = {}
+            var cachedStudiedIDs = readingProgress.studied_ids || []
+            for (var cachedIndex = 0; cachedIndex < cachedStudiedIDs.length; ++cachedIndex)
+                cachedStudied[String(cachedStudiedIDs[cachedIndex])] = true
+            remoteStudied = cachedStudied
             levelFilter = levelFilters.indexOf(readingProgress.level_filter) >= 0 ?
                 readingProgress.level_filter : ""
             mobileAuthenticated = data.mobile_authenticated === true
             if (data.authenticated) {
-                send(Protocol.top, {})
-                sendBackground(Protocol.studied, {})
+                if (Number(data.downloaded_count || 0) > 0) send(Protocol.downloaded, {})
+                else send(Protocol.top, {})
             }
             else statusText = "Login required — import your browser session and reinstall"
         } else if (type === Protocol.dataResponse) {
@@ -380,7 +392,9 @@ Rectangle {
                 finishStats = data.payload || finishStats
                 heading = "Great Job!"
                 screen = "finish"
-                statusText = ""
+                statusText = finishStats.pending_sync === true ?
+                    "Saved offline — Read status will sync automatically" :
+                    (finishStats.stats_unavailable === true ? "Read saved — statistics unavailable offline" : "")
                 Qt.callLater(function() { finishChart.requestPaint() })
             }
             else if (data.kind === "studied") {
@@ -390,7 +404,18 @@ Rectangle {
                 remoteStudied = studied
                 if (listingPayload) refreshListing("No stories found")
             }
-            else { busy = false; showListing(data.kind, data.payload) }
+            else if (data.kind === "download_course") {
+                busy = false
+                statusText = "Downloaded " + Number(data.payload.count || 0) +
+                    " chapters for offline reading"
+            }
+            else {
+                busy = false
+                showListing(data.kind, data.payload)
+                if (data.kind === "top" || data.kind === "latest" ||
+                        data.kind === "saved" || data.kind === "search")
+                    sendBackground(Protocol.studied, {})
+            }
         } else if (type === Protocol.errorResponse) {
             busy = false
             pendingContinue = null
@@ -404,7 +429,8 @@ Rectangle {
                 readingProgress = data.progress || readingProgress
             } else readingProgress = data
             if (listingPayload) refreshListing("No stories found")
-            statusText = ""
+            statusText = data.pending_sync === true ?
+                "Saved offline — Read status will sync automatically" : ""
         }
     }
 
@@ -625,12 +651,26 @@ Rectangle {
             }
         }
 
+        Rectangle {
+            id: downloadCourseButton
+            visible: root.screen === "library" && root.listingKind === "course"
+            anchors.right: parent.right; anchors.rightMargin: 104
+            anchors.verticalCenter: parent.verticalCenter
+            width: 224; height: 66
+            color: "black"; border.width: 2; border.color: "black"
+            Text { anchors.centerIn: parent; text: "Download course"; color: "white"; font.pixelSize: 21 }
+            MouseArea {
+                anchors.fill: parent
+                onClicked: root.send(Protocol.downloadCourse, { path: root.courseContext.path })
+            }
+        }
+
         Text {
             visible: root.screen !== "reader"
             anchors.left: parent.left
             anchors.leftMargin: booksBackButton.visible ? 194 : (finishWordsBackButton.visible ? 176 : 44)
             anchors.verticalCenter: parent.verticalCenter
-            width: parent.width - 360
+            width: downloadCourseButton.visible ? parent.width - 560 : parent.width - 360
             text: root.heading
             elide: Text.ElideRight
             color: "black"
@@ -678,12 +718,14 @@ Rectangle {
             model: [
                 { label: "Featured", type: Protocol.top },
                 { label: "Latest", type: Protocol.latest },
-                { label: "Bookmarked", type: Protocol.saved }
+                { label: "Bookmarked", type: Protocol.saved },
+                { label: "Downloaded", type: Protocol.downloaded }
             ]
             Rectangle {
                 property bool selected: root.listingKind === (modelData.type === Protocol.top ? "top" :
-                    (modelData.type === Protocol.latest ? "latest" : "saved"))
-                width: modelData.label === "Bookmarked" ? 190 : 150
+                    (modelData.type === Protocol.latest ? "latest" :
+                    (modelData.type === Protocol.saved ? "saved" : "downloaded")))
+                width: (modelData.label === "Bookmarked" || modelData.label === "Downloaded") ? 190 : 150
                 height: 68; color: selected ? "black" : "white"
                 border.width: 2; border.color: "black"
                 Text { anchors.centerIn: parent; text: modelData.label; color: parent.selected ? "white" : "black"; font.pixelSize: 22 }
@@ -702,7 +744,7 @@ Rectangle {
             MouseArea { anchors.fill: parent; onClicked: root.cycleLevelFilter() }
         }
         Rectangle {
-            width: navigation.width - 150 * 2 - 190 * 2 - 110 - 14 * 5; height: 68
+            width: navigation.width - 150 * 2 - 190 * 3 - 110 - 14 * 6; height: 68
             color: "white"; border.width: 2; border.color: "black"
             TextInput {
                 id: searchInput

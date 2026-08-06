@@ -26,6 +26,8 @@ const (
 	requestSettings    = uint32(10)
 	requestFinishStats = uint32(11)
 	requestSaved       = uint32(12)
+	requestDownload    = uint32(13)
+	requestDownloaded  = uint32(14)
 
 	responseState    = uint32(101)
 	responseData     = uint32(102)
@@ -101,7 +103,7 @@ func handle(conn *appload.Connection, client *duchinese.Client, progressStore *p
 	case requestBootstrap:
 		return sendJSON(conn, responseState, map[string]any{
 			"authenticated": client.Ready(), "mobile_authenticated": client.MobileReady(),
-			"progress": progressStore.State(),
+			"progress": progressStore.State(), "downloaded_count": client.DownloadedCount(),
 		})
 	case requestTop:
 		payload, err := client.Top()
@@ -112,6 +114,23 @@ func handle(conn *appload.Connection, client *duchinese.Client, progressStore *p
 	case requestSaved:
 		payload, err := client.Saved(max(1, req.Page))
 		return sendRaw(conn, "saved", payload, err)
+	case requestDownloaded:
+		payload, err := client.Downloaded()
+		return sendRaw(conn, "downloaded", payload, err)
+	case requestDownload:
+		if req.Path == "" {
+			return errors.New("course download requires a path")
+		}
+		count, err := client.DownloadCourse(req.Path)
+		if err != nil {
+			return err
+		}
+		if studied, studiedErr := client.StudiedLessonIDs(); studiedErr == nil {
+			_ = progressStore.SetStudiedIDs(studiedStrings(studied))
+		}
+		return sendJSON(conn, responseData, map[string]any{
+			"kind": "download_course", "payload": map[string]int{"count": count},
+		})
 	case requestSearch:
 		payload, err := client.Search(req.Query, max(1, req.Page))
 		return sendRaw(conn, "search", payload, err)
@@ -156,12 +175,34 @@ func handle(conn *appload.Connection, client *duchinese.Client, progressStore *p
 		return sendJSON(conn, responseProgress, state)
 	case requestStudied:
 		payload, err := client.StudiedLessonIDs()
-		return sendRaw(conn, "studied", payload, err)
-	case requestMarkRead:
-		if err := client.MarkStudied(req.ID); err != nil {
+		if err != nil {
 			return err
 		}
-		return sendJSON(conn, responseProgress, map[string]any{"studied_id": req.ID, "progress": progressStore.State()})
+		pending := progressStore.PendingStudiedIDs()
+		for _, id := range pending {
+			if client.MarkStudied(id) == nil {
+				if err := progressStore.ResolveStudied(id); err != nil {
+					return err
+				}
+			}
+		}
+		payload = mergeStudied(payload, pending)
+		if err := progressStore.SetStudiedIDs(studiedStrings(payload)); err != nil {
+			return err
+		}
+		return sendRaw(conn, "studied", payload, nil)
+	case requestMarkRead:
+		if err := client.MarkStudied(req.ID); err != nil {
+			if queueErr := progressStore.QueueStudied(req.ID); queueErr != nil {
+				return queueErr
+			}
+		} else if err := progressStore.ResolveStudied(req.ID); err != nil {
+			return err
+		}
+		if err := progressStore.RememberStudied(req.ID); err != nil {
+			return err
+		}
+		return sendJSON(conn, responseProgress, map[string]any{"studied_id": req.ID, "progress": progressStore.State(), "pending_sync": contains(progressStore.PendingStudiedIDs(), req.ID)})
 	case requestSettings:
 		if !validLevelFilter(req.Level) {
 			return errors.New("invalid level filter")
@@ -177,6 +218,20 @@ func handle(conn *appload.Connection, client *duchinese.Client, progressStore *p
 		}
 		if !req.Completed {
 			if err := client.MarkStudied(req.ID); err != nil {
+				if queueErr := progressStore.QueueStudied(req.ID); queueErr != nil {
+					return queueErr
+				}
+				return sendJSON(conn, responseData, map[string]any{
+					"kind": "finish_stats", "payload": map[string]any{
+						"chart_data": []any{}, "new_words": []any{}, "learned_words": []any{},
+						"new_count": -1, "learned_count": -1, "pending_sync": true,
+					},
+				})
+			}
+			if err := progressStore.ResolveStudied(req.ID); err != nil {
+				return err
+			}
+			if err := progressStore.RememberStudied(req.ID); err != nil {
 				return err
 			}
 		}
@@ -185,10 +240,64 @@ func handle(conn *appload.Connection, client *duchinese.Client, progressStore *p
 			ids = []string{req.ID}
 		}
 		payload, err := client.FinishedReadingStats(ids)
-		return sendRaw(conn, "finish_stats", payload, err)
+		if err != nil {
+			return sendJSON(conn, responseData, map[string]any{
+				"kind": "finish_stats", "payload": map[string]any{
+					"chart_data": []any{}, "new_words": []any{}, "learned_words": []any{},
+					"new_count": -1, "learned_count": -1, "stats_unavailable": true,
+				},
+			})
+		}
+		return sendRaw(conn, "finish_stats", payload, nil)
 	default:
 		return errors.New("unknown request")
 	}
+}
+
+func mergeStudied(payload json.RawMessage, pending []string) json.RawMessage {
+	var ids []any
+	if json.Unmarshal(payload, &ids) != nil {
+		return payload
+	}
+	seen := make(map[string]bool, len(ids)+len(pending))
+	for _, id := range ids {
+		seen[fmt.Sprint(id)] = true
+	}
+	for _, id := range pending {
+		if !seen[id] {
+			ids = append(ids, id)
+			seen[id] = true
+		}
+	}
+	merged, err := json.Marshal(ids)
+	if err != nil {
+		return payload
+	}
+	return merged
+}
+
+func contains(values []string, wanted string) bool {
+	for _, value := range values {
+		if value == wanted {
+			return true
+		}
+	}
+	return false
+}
+
+func studiedStrings(payload json.RawMessage) []string {
+	var values []any
+	if json.Unmarshal(payload, &values) != nil {
+		return nil
+	}
+	ids := make([]string, 0, len(values))
+	for _, value := range values {
+		id := fmt.Sprint(value)
+		if id != "" {
+			ids = append(ids, id)
+		}
+	}
+	return ids
 }
 
 func validLevelFilter(level string) bool {

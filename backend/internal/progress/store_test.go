@@ -83,3 +83,43 @@ func TestRecentCompletedIDsAreChronological(t *testing.T) {
 		}
 	}
 }
+
+func TestPendingStudiedRoundTripAndDeduplication(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "progress.json")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.QueueStudied("42"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.QueueStudied("42"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.QueueStudied("43"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetStudiedIDs([]string{"10", "11", "10"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RememberStudied("12"); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := reloaded.PendingStudiedIDs()
+	if len(got) != 2 || got[0] != "42" || got[1] != "43" {
+		t.Fatalf("pending studied = %v, want [42 43]", got)
+	}
+	if got := reloaded.State().StudiedIDs; len(got) != 3 || got[0] != "10" || got[2] != "12" {
+		t.Fatalf("studied snapshot = %v, want [10 11 12]", got)
+	}
+	if err := reloaded.ResolveStudied("42"); err != nil {
+		t.Fatal(err)
+	}
+	if got := reloaded.PendingStudiedIDs(); len(got) != 1 || got[0] != "43" {
+		t.Fatalf("pending studied after resolve = %v, want [43]", got)
+	}
+}
