@@ -116,12 +116,32 @@ and latest content, search, enter courses, open entitled stories, paginate their
 reader data, and reveal pinyin, meanings, and sentence translations.
 
 Authentication currently imports an existing browser session. Passwords never
-reach this project, the cookie is not printed, and both the local and tablet
-session files are mode `0600`. No credentials or proprietary DuChinese content
-are included in the repository.
+pass through that browser-session import flow. The optional mobile API helper
+reads a password interactively and sends it only to a DuChinese-operated API
+over HTTPS; it never stores or prints the password. Session values are not
+printed, and both the local and tablet session files are mode `0600`. No
+credentials or proprietary DuChinese content are included in the repository.
 
-Still to do: offline caching, reading-position persistence, a first-class login
-flow, progress/vocabulary synchronization, and broader compatibility testing.
+Offline course caching, reading-position persistence, bookmarks, studied-state
+synchronization, and end-of-chapter progress insights are implemented. Still
+to do: a first-class browser-assisted login flow, audio playback, and broader
+firmware and device compatibility testing.
+
+## Terms and responsible use
+
+This project is licensed under the [MIT License](LICENSE), but that license
+applies only to this project's code and documentation. It does not grant any
+rights to DuChinese stories, translations, audio, images, trademarks, APIs, or
+other service content.
+
+DuChinese's terms were reviewed on 2026-08-15. They reserve rights in service
+content and require use of the service within its intended scope. This client
+therefore requires each user to supply their own account, requests only content
+made available to that account, keeps downloaded material local for personal
+use, and does not bypass access controls. Users remain responsible for checking
+the current [DuChinese Privacy & Terms](https://duchinese.net/legal) and for
+ensuring their use is permitted. The project is unofficial and has not received
+approval from DuChinese or Sinamon AB.
 
 ## Quick setup on reMarkable 2
 
@@ -154,7 +174,7 @@ scripts/import-session-from-har.py /path/to/duchinese.har
 ```
 
 The generated file is outside the repository at
-`~/.config/duchinese-remarkable/session.json`. Then build and install:
+`~/.config/duchinese-remarkable/session.json`.
 
 For DuChinese's real end-of-chapter word statistics, create a separate mobile
 API session. The password is read interactively and is never stored:

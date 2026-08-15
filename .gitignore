@@ -1,1 +1,19 @@
 /build/
+
+# Authentication exports and local credentials
+*.har
+session.json
+mobile-session.json
+.session-*
+.mobile-session-*
+
+# Local application data
+/cache/
+/config/
+progress.json
+
+# Python and editor artifacts
+__pycache__/
+*.py[cod]
+.DS_Store
+*~
