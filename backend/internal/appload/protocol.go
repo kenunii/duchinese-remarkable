@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -21,7 +22,8 @@ type Message struct {
 }
 
 type Connection struct {
-	conn *net.UnixConn
+	conn   *net.UnixConn
+	sendMu sync.Mutex
 }
 
 func Dial(path string) (*Connection, error) {
@@ -69,6 +71,8 @@ func (c *Connection) Receive() (Message, error) {
 }
 
 func (c *Connection) Send(typ uint32, contents []byte) error {
+	c.sendMu.Lock()
+	defer c.sendMu.Unlock()
 	if len(contents) > MaxMessageSize {
 		return errors.New("AppLoad message exceeds 10 MiB")
 	}

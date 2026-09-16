@@ -14,6 +14,7 @@ var finishStats = 11
 var saved = 12
 var downloadCourse = 13
 var downloaded = 14
+var continueReading = 15
 
 var stateResponse = 101
 var dataResponse = 102

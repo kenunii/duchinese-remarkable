@@ -28,6 +28,7 @@ const (
 	requestSaved       = uint32(12)
 	requestDownload    = uint32(13)
 	requestDownloaded  = uint32(14)
+	requestContinue    = uint32(15)
 
 	responseState    = uint32(101)
 	responseData     = uint32(102)
@@ -117,6 +118,19 @@ func handle(conn *appload.Connection, client *duchinese.Client, progressStore *p
 	case requestDownloaded:
 		payload, err := client.Downloaded()
 		return sendRaw(conn, "downloaded", payload, err)
+	case requestContinue:
+		// The sync response can be relatively large. Keep the local bootstrap and
+		// library usable while the official cross-device state is fetched.
+		go func() {
+			remote, err := client.RemoteContinueReading()
+			if err != nil {
+				log.Printf("continue reading sync: %v", err)
+				_ = sendJSON(conn, responseData, map[string]any{"kind": "continue", "payload": nil})
+				return
+			}
+			_ = sendJSON(conn, responseData, map[string]any{"kind": "continue", "payload": remote})
+		}()
+		return nil
 	case requestDownload:
 		if req.Path == "" {
 			return errors.New("course download requires a path")

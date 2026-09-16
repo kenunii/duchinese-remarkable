@@ -69,6 +69,39 @@ Rectangle {
         statusText = lessonModel.count ? "" : emptyMessage
     }
 
+    function hideAppLoadKeyboard() {
+        // AppLoad owns the visible keyboard. It is not Qt.inputMethod, so walk
+        // from the loaded application to AppLoad's window and close its loader.
+        var item = root.parent
+        console.log("[DuChinese] closing keyboard; input visible=" + Qt.inputMethod.visible)
+        for (var depth = 0; item && depth < 8; ++depth) {
+            console.log("[DuChinese] keyboard ancestor " + depth + ": " + item)
+            if (typeof item.virtualKeyboardRef !== "undefined" && item.virtualKeyboardRef) {
+                console.log("[DuChinese] AppLoad keyboard found; active=" + item.virtualKeyboardRef.active)
+                item.virtualKeyboardRef.active = false
+                console.log("[DuChinese] AppLoad keyboard closed; active=" + item.virtualKeyboardRef.active)
+                return true
+            }
+            item = item.parent
+        }
+        console.log("[DuChinese] AppLoad keyboard ref not found")
+        return false
+    }
+
+    function submitSearch() {
+        var query = String(searchInput.text || "").trim()
+        searchInput.focus = false
+        root.forceActiveFocus()
+        Qt.inputMethod.commit()
+        Qt.inputMethod.hide()
+        hideAppLoadKeyboard()
+        Qt.callLater(function() {
+            Qt.inputMethod.hide()
+            root.hideAppLoadKeyboard()
+        })
+        send(Protocol.search, { query: query })
+    }
+
     function addItems(value, seen) {
         if (!value || typeof value !== "object") return
         if (Array.isArray(value)) {
@@ -82,6 +115,13 @@ Rectangle {
             var path = lessonPath || coursePath
             var isCourse = !value.crd_url && Boolean(value.lessons_url || value.course_path ||
                 (String(path).indexOf("/courses/") >= 0 && String(path).indexOf("/lessons/") !== 0))
+            var isSearchChapter = root.listingKind === "search" && !isCourse &&
+                ((value.course_position !== undefined && value.course_position !== null) ||
+                 Boolean(value.course_path) || Boolean(value.course))
+            if (isSearchChapter) {
+                if (value.course) addItems(value.course, seen)
+                return
+            }
             if (isCourse && String(path).slice(-13) !== "/lessons.json")
                 path = String(path).replace(/\/$/, "") + "/lessons.json"
             var key = (isCourse ? "c:" : "l:") + path
@@ -163,6 +203,7 @@ Rectangle {
             id: lesson.id || "", coursePath: readerReturn.coursePath,
             courseTitle: inCourse ? courseContext.title : (lesson.courseTitle || ""),
             chapterLabel: lesson.chapterLabel || "",
+            resumeTime: Number(lesson.resumeTime || 0),
             next: inCourse ? lessonAt(Number(lesson.listIndex) + 1) : null
         }
         send(Protocol.lesson, { path: lesson.path })
@@ -244,6 +285,8 @@ Rectangle {
         page = 0
         var saved = activeLesson && readingProgress.entries ? readingProgress.entries[activeLesson.path] : null
         var resumePosition = saved && saved.position !== undefined ? saved.position : 0
+        if (activeLesson && activeLesson.resumeTime > 0)
+            resumePosition = positionForAudioTime(reader.syllable_times || [], activeLesson.resumeTime)
         selectedWord = -1
         showSentenceTranslation = false
         screen = "reader"
@@ -252,6 +295,55 @@ Rectangle {
             rebuildPagination(resumePosition)
             saveProgress(false)
         })
+    }
+
+    function positionForAudioTime(syllableTimes, seconds) {
+        if (!syllableTimes.length || !words.length || seconds <= 0) return 0
+        var syllableIndex = 0
+        var lastWord = 0
+        for (var wordIndex = 0; wordIndex < words.length; ++wordIndex) {
+            var pinyin = String(words[wordIndex].pinyin || "").trim()
+            if (!pinyin) continue
+            var syllableCount = pinyin.split(/\s+/).length
+            for (var offset = 0; offset < syllableCount && syllableIndex < syllableTimes.length; ++offset) {
+                if (Number(syllableTimes[syllableIndex]) >= seconds) return wordIndex
+                ++syllableIndex
+            }
+            lastWord = wordIndex
+        }
+        return lastWord
+    }
+
+    function applyRemoteContinue(remote) {
+        if (!remote || !remote.id || !remote.path) return
+        var entries = readingProgress.entries || {}
+        var local = entries[String(remote.path)]
+        if (!local) {
+            for (var path in entries) {
+                if (entries[path].id && String(entries[path].id) === String(remote.id)) {
+                    local = entries[path]
+                    break
+                }
+            }
+        }
+        var last = {
+            path: local && local.path ? local.path : String(remote.path),
+            id: String(remote.id),
+            title: String(remote.title || "Story"),
+            level: String(remote.level || ""),
+            course_path: String(remote.course_path || ""),
+            course_title: String(remote.course_title || ""),
+            chapter_label: String(remote.chapter_label || ""),
+            page: local ? Number(local.page || 0) : 0,
+            position: local ? Number(local.position || 0) : 0,
+            completed: false,
+            updated_at: String(remote.updated_at || ""),
+            start_time: Number(remote.start_time || 0)
+        }
+        var updated = {}
+        for (var key in readingProgress) updated[key] = readingProgress[key]
+        updated.last = last
+        readingProgress = updated
     }
 
     function saveProgress(completed) {
@@ -335,7 +427,8 @@ Rectangle {
                          coursePath: last.course_path || "" }
         openLesson({ path: last.path, title: last.title, level: last.level,
                      id: last.id, courseTitle: last.course_title,
-                     chapterLabel: last.chapter_label, listIndex: -1 })
+                     chapterLabel: last.chapter_label, resumeTime: last.start_time,
+                     listIndex: -1 })
     }
 
     function continueFromCourse(payload) {
@@ -346,13 +439,16 @@ Rectangle {
             var item = lessonModel.get(index)
             if (String(item.itemPath) === String(last.path) ||
                     (last.id && String(item.itemID) === String(last.id))) {
-                openLesson(lessonAt(index))
+                var lesson = lessonAt(index)
+                lesson.resumeTime = Number(last.start_time || 0)
+                openLesson(lesson)
                 return
             }
         }
         openLesson({ path: last.path, title: last.title, level: last.level,
                      id: last.id, courseTitle: last.course_title,
-                     chapterLabel: last.chapter_label, listIndex: -1 })
+                     chapterLabel: last.chapter_label, resumeTime: last.start_time,
+                     listIndex: -1 })
     }
 
     function receive(type, contents) {
@@ -370,13 +466,15 @@ Rectangle {
             levelFilter = levelFilters.indexOf(readingProgress.level_filter) >= 0 ?
                 readingProgress.level_filter : ""
             mobileAuthenticated = data.mobile_authenticated === true
+            if (mobileAuthenticated) sendBackground(Protocol.continueReading, {})
             if (data.authenticated) {
                 if (Number(data.downloaded_count || 0) > 0) send(Protocol.downloaded, {})
                 else send(Protocol.top, {})
             }
             else statusText = "Login required — import your browser session and reinstall"
         } else if (type === Protocol.dataResponse) {
-            if (data.kind === "lesson") { busy = false; showLesson(data.payload) }
+            if (data.kind === "continue") applyRemoteContinue(data.payload)
+            else if (data.kind === "lesson") { busy = false; showLesson(data.payload) }
             else if (data.kind === "course" && pendingContinue) {
                 busy = false
                 continueFromCourse(data.payload)
@@ -752,6 +850,7 @@ Rectangle {
                 font.pixelSize: 22
                 clip: true
                 text: ""
+                onAccepted: root.submitSearch()
             }
             Text { visible: !searchInput.text && !searchInput.activeFocus; anchors.verticalCenter: parent.verticalCenter; x: 14; text: "Search stories…"; color: "#666"; font.pixelSize: 22 }
         }
@@ -760,7 +859,7 @@ Rectangle {
             Text { anchors.centerIn: parent; text: "Search"; color: "white"; font.pixelSize: 20 }
             MouseArea {
                 anchors.fill: parent
-                onClicked: root.send(Protocol.search, { query: searchInput.text })
+                onClicked: root.submitSearch()
             }
         }
     }
