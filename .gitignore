@@ -1,4 +1,6 @@
 /build/
+/pdf-import/build/
+/pdf-import/dist/
 
 # Authentication exports and local credentials
 *.har
@@ -15,5 +17,15 @@ progress.json
 # Python and editor artifacts
 __pycache__/
 *.py[cod]
+*.egg-info/
+.venv/
 .DS_Store
 *~
+
+tests/
+
+# Local secrets (including environment-file variants)
+.env
+.env.*
+*.pem
+*.key

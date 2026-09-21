@@ -2,6 +2,8 @@
   <qresource>
     <file>ui/Main.qml</file>
     <file>ui/Protocol.js</file>
+    <file alias="ui/WordPopup.qml">../shared/WordPopup.qml</file>
+    <file alias="ui/SentenceTranslationBar.qml">../shared/SentenceTranslationBar.qml</file>
     <file alias="fonts/NotoSansSC.ttf">../../assets/fonts/NotoSansSC.ttf</file>
   </qresource>
 </RCC>

@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "duchinese-pdf-import"
+version = "0.1.0"
+description = "Laptop-side OCR and page preparation for the reMarkable PDF reader"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["Pillow>=10"]
+
+[project.optional-dependencies]
+ocr = ["paddlepaddle==3.2.2", "paddleocr==3.7.0", "paddlex==3.7.2"]
+benchmark = ["lxml>=5"]
+
+[project.scripts]
+duchinese-pdf = "duchinese_pdf.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+duchinese_pdf = ["templates/*.html", "prompts/*.txt"]

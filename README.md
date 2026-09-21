@@ -2,6 +2,18 @@
 
 An unofficial, personal-use DuChinese client for reMarkable tablets.
 
+## Local PDF support
+
+The laptop-side OCR and page preparation tools live in the
+[`pdf-import/` Python subproject](pdf-import/README.md). It contains the tested
+PaddleOCR runner, single-pass LLM annotations with audited OCR corrections,
+benchmark viewer, and validated single-page assembly. Full-book orchestration
+and multi-page navigation are still to be implemented.
+
+The separate PDF test app lives in `packaging/pdf-test/` and reuses the word
+popup and sentence bar in `packaging/shared/` with the DuChinese reader.
+Device packaging and deployment commands remain under `scripts/`.
+
 ## Goal
 
 Make it possible to read DuChinese stories on a reMarkable using an existing,
@@ -205,9 +217,13 @@ If `rcc` is installed outside `PATH`, point the build at it:
 RCC_BIN=/path/to/qt6/rcc scripts/install-appload-rm2.sh
 ```
 
-The installer builds the resource bundle, copies it atomically to
-`/home/root/xovi/exthome/appload/duchinese`, and stops only an older DuChinese
-backend process. It does not restart `xochitl`. Unlock the tablet, open AppLoad
+The installer builds and stages the complete package, verifies SHA-256 checksums,
+and installs it at `/home/root/xovi/exthome/appload/duchinese`. It backs up the
+previous package and restarts `xochitl` to clear AppLoad resources and Qt QML
+caches. This closes open AppLoad windows without rebooting the tablet. An
+identical package already activated in the current UI process skips the restart.
+If service activation fails, the installer restores the previous package.
+Unlock the tablet and open AppLoad
 from the main UI, and tap **DuChinese**. Browse or search, open an unlocked
 story, and tap a Chinese word to show its pinyin and meaning. Tap the bordered
 translation area to show or hide the selected sentence's translation.

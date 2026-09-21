@@ -1,0 +1,8 @@
+{
+  "name": "PDF Reader Test",
+  "loadsBackend": false,
+  "entry": "/pdf-test/Main.qml",
+  "id": "duchinese-pdf-test",
+  "supportsScaling": true,
+  "canHaveMultipleFrontends": false
+}

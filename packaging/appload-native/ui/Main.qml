@@ -23,8 +23,6 @@ Rectangle {
     property int page: 0
     property var pageStarts: [0, 0]
     property int selectedWord: -1
-    property real lookupX: 48
-    property real lookupY: 300
     property bool showPinyin: false
     property bool showSentenceTranslation: false
     property real swipeStartX: 0
@@ -701,12 +699,8 @@ Rectangle {
             return
         }
         selectedWord = index
-        var position = item.mapToItem(root, 0, item.height)
-        lookupX = Math.max(48, Math.min(root.width - 668, position.x + item.width / 2 - 310))
-        lookupY = position.y + 10
-        if (lookupY + 180 > readerNav.y - 12)
-            lookupY = Math.max(translationArea.y + translationArea.height + 12,
-                               position.y - item.height - 180)
+        var position = item.mapToItem(root, 0, 0)
+        wordPopup.wordRect = Qt.rect(position.x, position.y, item.width, item.height)
     }
 
     AppLoad {
@@ -946,29 +940,16 @@ Rectangle {
         }
     }
 
-    Rectangle {
+    SentenceTranslationBar {
         id: translationArea
         visible: root.screen === "reader"
         anchors.top: toolbar.bottom; anchors.topMargin: 20
         anchors.left: parent.left; anchors.leftMargin: 48
         anchors.right: parent.right; anchors.rightMargin: 48
-        height: 116
-        color: "white"; border.width: 2; border.color: "black"
-        Text {
-            anchors.fill: parent; anchors.margins: 16
-            text: !root.showSentenceTranslation ? "Tap to show sentence translation" :
-                  root.selectedWord < 0 ? "Select a word to show its sentence translation" :
-                  (root.selectedTranslation() || "No sentence translation available")
-            wrapMode: Text.Wrap
-            verticalAlignment: Text.AlignVCenter
-            horizontalAlignment: Text.AlignHCenter
-            font.family: "Noto Sans"; font.pixelSize: 23
-            color: root.showSentenceTranslation ? "black" : "#555"
-        }
-        MouseArea {
-            anchors.fill: parent
-            onClicked: root.showSentenceTranslation = !root.showSentenceTranslation
-        }
+        revealed: root.showSentenceTranslation
+        hasSelection: root.selectedWord >= 0
+        translation: root.selectedTranslation()
+        onToggleRequested: root.showSentenceTranslation = !root.showSentenceTranslation
     }
 
     MouseArea {
@@ -1021,19 +1002,16 @@ Rectangle {
         }
     }
 
-    Rectangle {
+    WordPopup {
+        id: wordPopup
         visible: root.screen === "reader" && root.selectedWord >= 0
-        x: root.lookupX; y: root.lookupY
-        width: 620; height: 180; z: 20
-        color: "white"; border.width: 3; border.color: "black"
-        Text {
-            anchors.fill: parent; anchors.margins: 22
-            text: root.selectedWord < 0 ? "" :
-                root.wordText(root.words[root.selectedWord]) + "   " + (root.words[root.selectedWord].pinyin || "") + "\n" +
-                (root.words[root.selectedWord].meaning || "")
-            wrapMode: Text.Wrap; font.family: chineseFont.name; font.pixelSize: 25
-        }
-        MouseArea { anchors.fill: parent; onClicked: root.selectedWord = -1 }
+        hanzi: root.selectedWord < 0 ? "" : root.wordText(root.words[root.selectedWord])
+        pinyin: root.selectedWord < 0 ? "" : (root.words[root.selectedWord].pinyin || "")
+        meaning: root.selectedWord < 0 ? "" : (root.words[root.selectedWord].meaning || "")
+        textFont: chineseFont.name
+        availableRect: Qt.rect(48, translationArea.y + translationArea.height + 12,
+                              root.width - 96, readerNav.y - translationArea.y - translationArea.height - 24)
+        onDismissed: root.selectedWord = -1
     }
 
     Row {
