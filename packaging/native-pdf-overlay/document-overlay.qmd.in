@@ -1,0 +1,27 @@
+AFFECT /qml/device/view/documentview/DocumentView.qml
+    TRAVERSE FocusScope#root
+        LOCATE AFTER ALL
+        INSERT {
+            Loader {
+                id: duchinesePdfOverlay
+                anchors.fill: parent
+                z: 100001
+                active: root.document !== null
+                    && root.document.id === "@PDF_DOCUMENT_ID@"
+                source: "qrc:/duchinese-pdf-overlay/LookupOverlay.qml"
+                onLoaded: {
+                    item.nativeSceneView = sceneView;
+                    item.pageIndex = root.currentPage;
+                    console.log("[PDF lookup] overlay loaded for prepared PDF");
+                }
+                Connections {
+                    target: root
+                    function onCurrentPageChanged() {
+                        if (duchinesePdfOverlay.item)
+                            duchinesePdfOverlay.item.pageIndex = root.currentPage;
+                    }
+                }
+            }
+        }
+    END TRAVERSE
+END AFFECT
