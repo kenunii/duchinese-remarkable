@@ -4,8 +4,10 @@ import "LookupData.js" as LookupData
 Item {
     id: root
     property var nativeSceneView: null
+    property string documentId: ""
     property int pageIndex: 0
-    property var pageData: LookupData.pages[pageIndex + 1] || null
+    property var pageData: LookupData.documents[documentId]
+        ? (LookupData.documents[documentId].pages[pageIndex + 1] || null) : null
     property var selectedWord: null
     property var selectedBox: null
     property int selectedSentenceIndex: -1
@@ -64,8 +66,6 @@ Item {
                 }
             }
         }
-        console.log("[PDF lookup] tap page=" + (pageIndex + 1) + " x=" + Math.round(x)
-                    + " y=" + Math.round(y) + " word=" + (nearest ? nearest.hanzi : "none"))
         return nearest ? {word: nearest, box: nearestBox} : null
     }
 
@@ -109,7 +109,6 @@ Item {
         selectedBox = match.box
         selectedSentenceLines = sentenceLines(index)
         selectedSentenceIndex = index
-        console.log("[PDF lookup] sentence page=" + (pageIndex + 1) + " index=" + index)
     }
 
     function insidePopup(viewX, viewY) {

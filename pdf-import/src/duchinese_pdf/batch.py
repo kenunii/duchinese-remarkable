@@ -53,7 +53,8 @@ def process_page(number, image_path, raw_path, root, title):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('pdf',type=Path)
-    parser.add_argument('output',type=Path,help='Directory already containing images/page-NNN.png at 240 dpi')
+    parser.add_argument('output',type=Path,help='Directory already containing images/page-NNN.png')
+    parser.add_argument('--dpi',type=int,default=240,help='Rasterization resolution recorded in the manifest (default: 240)')
     parser.add_argument('--first',type=int,default=1)
     parser.add_argument('--last',type=int,required=True)
     parser.add_argument('--ocr-python',type=Path,required=True)
@@ -62,6 +63,7 @@ def main():
     parser.add_argument('--key-file',type=Path,help='Optional local DeepSeek credential file')
     args=parser.parse_args()
     if args.first<1 or args.last<args.first:parser.error('Invalid page range')
+    if args.dpi<1:parser.error('DPI must be positive')
     if args.key_file:os.environ['DEEPSEEK_API_KEY']=read_api_key(args.key_file)
     if not os.environ.get('DEEPSEEK_API_KEY'):parser.error('DEEPSEEK_API_KEY is required')
     root=args.output
@@ -70,7 +72,7 @@ def main():
     for path in images.values():
         if not path.is_file():parser.error(f'Missing rendered page: {path}')
     metadata={'schema_version':1,'pdf_sha256':file_hash(args.pdf),'title':args.title,'first_page':args.first,'last_page':args.last,
-              'model':'deepseek-flash','thinking':True,'max_output_tokens':48000,'dpi':240,
+              'model':'deepseek-flash','thinking':True,'max_output_tokens':48000,'dpi':args.dpi,
               'image_hashes':{str(n):file_hash(p) for n,p in images.items()},'status':'running','pages':[]}
     write_json(root/'manifest.json',metadata)
     raw_root=root/'ocr'
