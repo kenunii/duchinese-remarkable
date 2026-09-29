@@ -7,11 +7,11 @@ AFFECT /qml/device/view/documentview/DocumentView.qml
                 anchors.fill: parent
                 z: 100001
                 active: root.document !== null
-                    && @PDF_DOCUMENT_IDS@.indexOf(root.document.id) >= 0
+                    && @PDF_DOCUMENT_IDS@.indexOf(String(root.document.id)) >= 0
                 source: "qrc:/duchinese-pdf-overlay/LookupOverlay.qml"
                 onLoaded: {
                     item.nativeSceneView = sceneView;
-                    item.documentId = root.document.id;
+                    item.documentId = String(root.document.id);
                     item.pageIndex = root.currentPage;
                     console.log("[PDF lookup] overlay loaded for prepared PDF");
                 }
@@ -19,7 +19,7 @@ AFFECT /qml/device/view/documentview/DocumentView.qml
                     target: root
                     function onDocumentChanged() {
                         if (duchinesePdfOverlay.item && root.document)
-                            duchinesePdfOverlay.item.documentId = root.document.id;
+                            duchinesePdfOverlay.item.documentId = String(root.document.id);
                     }
                     function onCurrentPageChanged() {
                         if (duchinesePdfOverlay.item)
