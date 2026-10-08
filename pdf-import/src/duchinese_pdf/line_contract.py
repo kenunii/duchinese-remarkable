@@ -31,7 +31,7 @@ def messages(source):
             {'role':'user','content':json.dumps(payload(source),ensure_ascii=False,separators=(',',':'))}]
 
 
-def compile_lines(source, answer):
+def compile_lines(source, answer, allowed_word_gaps=None):
     validate_schema(answer, LINE_SCHEMA)
     expected = payload(source)['lines']
     if [x['id'] for x in answer['lines']] != [x['id'] for x in expected]:
@@ -50,4 +50,5 @@ def compile_lines(source, answer):
                 corrections.append({'offset':cursor+i,'before':a,'after':b,'reason':output['correction_reason']})
         cursor += len(before)
     # Existing coverage, word/gap and geometry validation remains mandatory.
-    return compile_annotations(source, {'corrections':corrections,'sentences':answer['sentences']})
+    return compile_annotations(source, {'corrections':corrections,'sentences':answer['sentences']},
+                               allowed_word_gaps=allowed_word_gaps)

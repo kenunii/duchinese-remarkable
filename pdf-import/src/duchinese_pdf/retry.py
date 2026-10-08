@@ -9,7 +9,8 @@ from .assemble import assemble
 from .prepare import write_json
 
 
-def retry_pages(root, numbers):
+def retry_pages(root, numbers, workers=2):
+    if workers < 1: raise ValueError('Workers must be positive')
     manifest=json.loads((root/'manifest.json').read_text())
     if manifest['status'] not in ('completed','completed-with-errors'):raise ValueError('Wait for the original batch to finish')
     entries={r['page']:r for r in manifest['pages']}
@@ -42,7 +43,7 @@ def retry_pages(root, numbers):
                 meta=json.loads((attempt/'run.json').read_text());record.update(requests_sent=meta['requests_sent'],usage=meta.get('usage'))
         write_json(page/'status.json',record);print(json.dumps(record,ensure_ascii=False),flush=True)
         return record
-    with ThreadPoolExecutor(max_workers=2) as pool:
+    with ThreadPoolExecutor(max_workers=workers) as pool:
         for record in pool.map(process,numbers):
             entries[record['page']]=record
             manifest['pages']=[entries[n] for n in sorted(entries)];write_json(root/'manifest.json',manifest)
@@ -55,10 +56,11 @@ def retry_pages(root, numbers):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('work',type=Path);parser.add_argument('--pages',nargs='+',type=int,required=True);parser.add_argument('--key-file',type=Path)
+    parser.add_argument('--workers',type=int,default=2,help='Concurrent retry requests (default: 2)')
     args=parser.parse_args()
     if args.key_file:os.environ['DEEPSEEK_API_KEY']=read_api_key(args.key_file)
     if not os.environ.get('DEEPSEEK_API_KEY'):parser.error('DEEPSEEK_API_KEY or --key-file required')
-    try:m=retry_pages(args.work,args.pages)
+    try:m=retry_pages(args.work,args.pages,args.workers)
     except (ValueError,OSError,KeyError) as exc:parser.exit(1,str(exc)+'\n')
     print(m['status'])
 

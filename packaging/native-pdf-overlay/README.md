@@ -26,4 +26,9 @@ bash scripts/build-native-pdf-overlay.sh \
 The bundle is written to `build/native-pdf-overlay/`. The readable QMD patch is
 generated from `packaging/native-pdf-overlay/document-overlay.qmd.in`. It targets
 the reMarkable 3.27.3.0 document view. The generated bundle and document-specific
-lookup data stay under ignored `build/`.
+lookup data stay under ignored `build/`. The build puts each annotated page in a
+separate JavaScript resource. Opening a document loads a small page index and
+includes only the visible page's lookup data, caching pages already opened. The
+build uses `fontTools` to subset the Chinese popup font to glyphs present in the
+prepared documents. Set `NATIVE_OVERLAY_OUTPUT_DIR` to build a candidate without
+replacing the current local bundle.

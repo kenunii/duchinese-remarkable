@@ -45,6 +45,35 @@ lines in raw reading order; blank fields split exercise text into fragments.
 The page image preserves their visual appearance, but annotation preparation
 must retain those distinctions and must not fill exercise answers.
 
+### Smaller local model follow-up (2026-10-08)
+
+PP-OCRv5 mobile detection and recognition were run on the same page-22 and
+page-26 PNGs, with the server run's 240-dpi input, four CPU threads, 1536-pixel
+detector limit, word boxes, and orientation/unwarping disabled. The downloaded
+model initialization took 118.1 s once; inference took 17.3 s on page 22 and
+12.3 s on page 26, compared with 48.1 s and 60.1 s for the earlier server run.
+The two mobile pages had 8 and 4 Chinese edits respectively (12/617, 1.94%
+CER), versus 1 and 0 server edits (1/617, 0.16% CER). The mobile output passed
+the importer character-box validation on both pages. These two selected pages
+show a useful speedup with lower text accuracy; they do not establish a
+whole-book result or a controlled runtime comparison across different runs.
+
+### Google Vision image OCR follow-up (2026-10-08)
+
+Cloud Vision `DOCUMENT_TEXT_DETECTION` was tested on the same five reference
+pages using rendered PNGs sent through `images:annotate`. Its symbol boxes pass
+the importer's geometry checks. Vision's original paragraph order scrambled
+some table and blank-fill layouts, so the adapter uses spatial rows when
+Chinese paragraphs jump substantially upward on the page. With that ordering,
+the five pages have 2, 0, 0, 3, and 0 Chinese edits respectively: 5/1,209
+(0.41% CER). The pinned Paddle server run has 2/1,209 (0.17% CER).
+
+The same Vision path processed all 210 PNGs of the new textbook in roughly
+90 seconds with 32 concurrent requests and no request failures. All converted
+pages passed the preparer's character-box checks. This measures OCR throughput
+and syntax/geometry validation, not translation quality or whole-book OCR
+accuracy; the reference pages belong to the earlier textbook sample.
+
 ### Agreed implementation after the benchmark
 
 Use the pinned local Paddle configuration, prepare text/layout, then use one

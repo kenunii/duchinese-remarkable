@@ -38,7 +38,9 @@ def assemble(characters, annotations, image_size):
         last_line = None
         for char in chars[start:end]:
             x, y, w, h = char['box']
-            if char['line'] == last_line:
+            if (char['line'] == last_line and
+                abs((boxes[-1][1] + boxes[-1][3]/2) - (y + h/2)) < min(boxes[-1][3], h)/2 and
+                x - (boxes[-1][0] + boxes[-1][2]) <= 1.5 * max(boxes[-1][3], h)):
                 old = boxes[-1]
                 right, bottom = max(old[0]+old[2], x+w), max(old[1]+old[3], y+h)
                 old[0], old[1] = min(old[0], x), min(old[1], y)

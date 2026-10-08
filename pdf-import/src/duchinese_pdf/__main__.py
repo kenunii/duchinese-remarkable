@@ -8,13 +8,13 @@ def main():
     parser = argparse.ArgumentParser(
         description="Prepare local PDF pages on the laptop. Page-range processing is available via batch.",
         epilog="Commands: ocr (rendered images), prepare (OCR geometry), annotate (LLM), assemble (annotated page), "
-               "batch (rendered page range), retry (explicit failed-page rerun), merge (completed ranges), preview (offline page reader), score and viewer (five-page benchmark). Use COMMAND --help for options.",
+               "batch (rendered page range), batch-existing (already completed OCR), retry (explicit failed-page rerun), merge (completed ranges), preview (offline page reader), score and viewer (five-page benchmark). Use COMMAND --help for options.",
     )
-    parser.add_argument("command", choices=["ocr", "prepare", "annotate", "assemble", "batch", "retry", "merge", "preview", "score", "viewer"])
+    parser.add_argument("command", choices=["ocr", "prepare", "annotate", "assemble", "batch", "batch-existing", "retry", "merge", "preview", "score", "viewer"])
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     sys.argv = [f"{parser.prog} {args.command}", *args.arguments]
-    importlib.import_module(f"duchinese_pdf.{args.command}").main()
+    importlib.import_module(f"duchinese_pdf.{args.command.replace('-', '_')}").main()
 
 
 if __name__ == "__main__":

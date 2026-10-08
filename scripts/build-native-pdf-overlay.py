@@ -4,9 +4,11 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 from uuid import UUID
+from xml.etree import ElementTree
 
 
 def package(collection: Path, pdf: Path):
@@ -74,9 +76,35 @@ def main():
         documents[document_id] = data
         print(f'Packaged {len(data["pages"])} validated pages for {document_id}')
     output.mkdir(parents=True, exist_ok=True)
-    (output / 'LookupData.js').write_text(
+    (output / 'LookupData.js').unlink(missing_ok=True)
+    data_dir = output / 'data'
+    if data_dir.exists():
+        shutil.rmtree(data_dir)
+    index = {}
+    glyphs = set()
+    resources = ['LookupOverlay.qml', 'SentencePopup.qml', 'LookupIndex.js',
+                 'LookupPageLoader.js',
+                 'WordPopup.qml', 'NotoSansSC.ttf']
+    for document_id, document in documents.items():
+        index[document_id] = sorted(document['pages'], key=int)
+        document_dir = data_dir / document_id
+        document_dir.mkdir(parents=True)
+        for number, page in document['pages'].items():
+            page_json = json.dumps(page, ensure_ascii=False, separators=(',', ':'))
+            glyphs.update(page_json)
+            relative = f'data/{document_id}/page-{int(number):03d}.js'
+            (output / relative).write_text(f'var lookupData = {page_json};\n')
+            resources.append(relative)
+    (output / 'LookupIndex.js').write_text(
         '.pragma library\nvar documents = '
-        + json.dumps(documents, ensure_ascii=False, separators=(',', ':')) + ';\n')
+        + json.dumps(index, separators=(',', ':')) + ';\n')
+    (output / 'LookupGlyphs.txt').write_text(''.join(sorted(glyphs)))
+    qresource = ElementTree.Element('qresource', prefix='/duchinese-pdf-overlay')
+    for resource in resources:
+        ElementTree.SubElement(qresource, 'file').text = resource
+    rcc_root = ElementTree.Element('RCC')
+    rcc_root.append(qresource)
+    ElementTree.ElementTree(rcc_root).write(output / 'application.qrc', encoding='unicode')
     print(json.dumps(list(documents)))
 
 

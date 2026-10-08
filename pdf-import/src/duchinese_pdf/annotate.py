@@ -40,7 +40,7 @@ def validate_schema(value, schema, path='response'):
         raise ValueError(f'{path}: expected {kind}')
 
 
-def compile_annotations(source, answer):
+def compile_annotations(source, answer, allowed_word_gaps=None):
     original = validate_source(source)
     validate_schema(answer, SCHEMA)
     corrected = copy.deepcopy(source)
@@ -59,6 +59,9 @@ def compile_annotations(source, answer):
         corrected['characters'][pos]['text'] = after
     text = ''.join(c['text'] for c in corrected['characters'])
     gaps = gap_offsets(corrected['characters'])
+    allowed_word_gaps = set(allowed_word_gaps or ())
+    if not allowed_word_gaps.issubset(gaps):
+        raise ValueError('Allowed word gap is not an observed layout gap')
     words, sentences, cursor = [], [], 0
     for sid, sentence in enumerate(answer['sentences']):
         if not sentence['translation'].strip() or not sentence['words']:
@@ -72,7 +75,8 @@ def compile_annotations(source, answer):
             if HAN.search(token) and (not word['pinyin'].strip() or not word['meaning'].strip()):
                 raise ValueError('Chinese word lacks pinyin or contextual meaning')
             # Reject words bridging conspicuous horizontal gaps within a row.
-            if any(cursor < offset < end for offset in gaps):
+            if any(cursor < offset < end for offset in gaps
+                   if offset not in allowed_word_gaps):
                 raise ValueError('Word crosses a large horizontal layout gap')
             words.append({'start': cursor, 'end': end, 'hanzi': token,
                           'pinyin': word['pinyin'], 'meaning': word['meaning'], 'sentence': sid})

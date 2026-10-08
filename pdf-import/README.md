@@ -116,6 +116,10 @@ packaging/UI checks, not this Python package.
 
 The default is **DeepSeek Flash with Thinking enabled, a 48,000-completion-token
 limit and a 900-second HTTP timeout**, using the tested line-ID contract.
+Batch processing sends up to 16 page requests concurrently by default; use
+`--annotation-workers N` to tune concurrency without changing Thinking mode.
+Pages enter the annotation queue as their OCR finishes, so parallel requests
+cannot make the sequential OCR stage finish sooner.
 Configure `DEEPSEEK_API_KEY` in the environment, or pass
 `--key-file /path/to/private/deepseek-key` to `annotate` or `batch`.
 The locally copied credential file is private (mode 0600) and outside the repo. Credentials never go into command
@@ -127,6 +131,42 @@ The existing OpenAI Responses path remains available through `--provider openai
 --model MODEL` and `OPENAI_API_KEY`. That compatibility path retains its earlier
 prompt/schema. `--model` / `PDF_IMPORT_MODEL` and `--provider` /
 `PDF_IMPORT_PROVIDER` override selection. No extra LLM SDK is needed.
+
+### Google Vision OCR trial
+
+The direct image trial sends rendered page images to Cloud Vision's
+`DOCUMENT_TEXT_DETECTION` endpoint and saves its symbol boxes in the existing
+`prepare` input shape. It needs a Google Cloud project with billing, the Cloud
+Vision API enabled, and an API key restricted to that API. It does not need
+Cloud Storage or the `gcloud` CLI. Save the key outside Git in a mode-0600 file;
+the script sends it in an HTTP header and never writes it to the output.
+
+```sh
+PYTHONPATH=pdf-import/src python3 -m duchinese_pdf.google_vision \
+  build/new-textbook-20260930/images/page-{026,040,046}.png \
+  --output build/google-vision-trial --key-file /path/to/private/vision-key
+```
+
+The output stays under the ignored `build/` directory. Each page contains the
+raw provider response and a converted `page-NNN_res.json` file that can be
+passed to `prepare`. Inspect OCR text and character geometry before using it
+for a full book. Page images and recognized text are sent to Google for this
+trial; the PDF file itself is not uploaded by this command.
+
+After a successful OCR quality check, the same command accepts a full page
+glob and `--workers 32`. The Google output must be complete before annotation.
+`batch-existing` reads those finished OCR files, sends DeepSeek Flash requests
+with Thinking enabled in parallel, and writes per-page results and a manifest.
+It reuses finished pages after an interruption and never silently resends an
+attempt that might already have reached DeepSeek.
+
+```sh
+PYTHONPATH=pdf-import/src python3 -m duchinese_pdf batch-existing \
+  /path/to/compressed.pdf /path/to/rendered/images \
+  /path/to/google-vision-output /path/to/new-collection \
+  --first 47 --last 210 --workers 128 \
+  --title 'Chinese textbook' --key-file /path/to/private/deepseek-key
+```
 
 ```sh
 # Keep the existing raw OCR intact; prepare a separate annotation input.

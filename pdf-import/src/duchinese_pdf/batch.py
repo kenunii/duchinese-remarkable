@@ -18,7 +18,7 @@ def file_hash(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def process_page(number, image_path, raw_path, root, title):
+def process_page(number, image_path, raw_path, root, title, api_key=None):
     out=root/'pages'/f'{number:03d}';out.mkdir(parents=True)
     record={'page':number,'image':str(image_path.relative_to(root))}
     try:
@@ -32,7 +32,7 @@ def process_page(number, image_path, raw_path, root, title):
             source=prepare(raw,dimensions);source['provenance']=provenance
             write_json(out/'source.json',source)
             record['characters']=len(source['characters'])
-            meta=run(source,out/'annotation',model='deepseek-flash',provider='deepseek')
+            meta=run(source,out/'annotation',model='deepseek-flash',provider='deepseek',api_key=api_key)
             corrected=json.loads((out/'annotation/result/characters.json').read_text())
             annotations=json.loads((out/'annotation/result/annotations.json').read_text())
             book=assemble(corrected,annotations,dimensions)
@@ -61,9 +61,12 @@ def main():
     parser.add_argument('--models',type=Path,required=True)
     parser.add_argument('--title',default='Local PDF')
     parser.add_argument('--key-file',type=Path,help='Optional local DeepSeek credential file')
+    parser.add_argument('--annotation-workers',type=int,default=16,
+                        help='Maximum concurrent DeepSeek page requests (default: 16)')
     args=parser.parse_args()
     if args.first<1 or args.last<args.first:parser.error('Invalid page range')
     if args.dpi<1:parser.error('DPI must be positive')
+    if args.annotation_workers<1:parser.error('Annotation workers must be positive')
     if args.key_file:os.environ['DEEPSEEK_API_KEY']=read_api_key(args.key_file)
     if not os.environ.get('DEEPSEEK_API_KEY'):parser.error('DEEPSEEK_API_KEY is required')
     root=args.output
@@ -73,6 +76,7 @@ def main():
         if not path.is_file():parser.error(f'Missing rendered page: {path}')
     metadata={'schema_version':1,'pdf_sha256':file_hash(args.pdf),'title':args.title,'first_page':args.first,'last_page':args.last,
               'model':'deepseek-flash','thinking':True,'max_output_tokens':48000,'dpi':args.dpi,
+              'annotation_workers':args.annotation_workers,
               'image_hashes':{str(n):file_hash(p) for n,p in images.items()},'status':'running','pages':[]}
     write_json(root/'manifest.json',metadata)
     raw_root=root/'ocr'
@@ -84,7 +88,7 @@ def main():
     env.pop('DEEPSEEK_API_KEY',None);env.pop('OPENAI_API_KEY',None)
     env['PYTHONPATH']=str(Path(__file__).resolve().parents[1])
     pending={};submitted=set();results={}
-    with (root/'ocr.log').open('w') as log,ThreadPoolExecutor(max_workers=2) as pool:
+    with (root/'ocr.log').open('w') as log,ThreadPoolExecutor(max_workers=args.annotation_workers) as pool:
         proc=subprocess.Popen(command,stdout=log,stderr=subprocess.STDOUT,env=env)
         while True:
             report_path=raw_root/'run.json'

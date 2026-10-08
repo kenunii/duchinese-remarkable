@@ -1,13 +1,14 @@
 import QtQuick 2.15
-import "LookupData.js" as LookupData
+import "LookupIndex.js" as LookupIndex
+import "LookupPageLoader.js" as LookupPageLoader
 
 Item {
     id: root
     property var nativeSceneView: null
     property string documentId: ""
     property int pageIndex: 0
-    property var pageData: LookupData.documents[documentId]
-        ? (LookupData.documents[documentId].pages[pageIndex + 1] || null) : null
+    property var pageData: LookupPageLoader.getPage(
+        documentId, pageIndex + 1, LookupIndex.documents[documentId])
     property var selectedWord: null
     property var selectedBox: null
     property int selectedSentenceIndex: -1
