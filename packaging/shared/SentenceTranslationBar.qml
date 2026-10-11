@@ -1,16 +1,17 @@
 import QtQuick 2.15
 
-Rectangle {
+Item {
     id: bar
     property bool revealed: false
     property bool hasSelection: false
     property string translation: ""
     signal toggleRequested
-    height: 116
-    color: "white"; border.width: 2; border.color: "black"
+    height: 108
     Flickable {
         id: textViewport
-        anchors.fill: parent; anchors.margins: 16
+        anchors.left: parent.left; anchors.right: parent.right
+        anchors.top: parent.top; anchors.bottom: divider.top
+        anchors.bottomMargin: 12
         contentWidth: width
         contentHeight: Math.max(height, label.implicitHeight)
         clip: true
@@ -33,5 +34,12 @@ Rectangle {
             width: textViewport.width; height: textViewport.contentHeight
             onClicked: bar.toggleRequested()
         }
+    }
+    Rectangle {
+        id: divider
+        anchors.left: parent.left; anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: 2
+        color: "#555555"
     }
 }

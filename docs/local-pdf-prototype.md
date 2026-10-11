@@ -63,14 +63,13 @@ scripts/install-pdf-test-rm2.sh rm2
 The UI check exercises all annotated regions with actual mouse events, validates
 full-page and zoom coordinate mapping, and saves two rendered previews in the
 build directory. It mounts resources below an isolated prefix like AppLoad does.
-Both installers use `scripts/deploy-appload.sh`. It stages a complete package,
-verifies SHA-256 sums before activation, keeps the previous package outside the
-AppLoad scan directory, and restarts xochitl to clear registered resources and
-cached QML. This closes open AppLoad windows but does not reboot the tablet.
-A failed service activation restores the previous package. An identical package
-already activated in the current xochitl process skips the restart. The PDF app
-logs its content-derived build ID when opened. Open **PDF Reader Test** after
-installation; refreshing AppLoad is no longer an activation step.
+Both installers use `scripts/deploy-appload.sh`. It stages and verifies the package,
+then replaces files only when the app's backend and resources are no longer resident.
+It keeps the previous package outside AppLoad's scan directory and never signals
+processes or restarts xochitl, including during recovery. Close apps and tap
+**Reload** in AppLoad after installation, then open **PDF Reader Test**. The PDF
+app logs its content-derived build ID when opened; installation on disk alone is
+not proof of runtime activation.
 
 ## Before scaling up
 

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -39,9 +40,11 @@ type MobileSession struct {
 type Client struct {
 	http        *http.Client
 	sessionPath string
+	sessionMu   sync.Mutex
 	session     Session
 	mobile      MobileSession
 	cacheDir    string
+	entitledMu  sync.Mutex
 	entitledCRD map[string]string
 }
 
@@ -94,7 +97,13 @@ func New(sessionPath string, additionalPaths ...string) (*Client, error) {
 }
 
 func (c *Client) Ready() bool {
-	return c.session.Cookie != ""
+	return c.cookie() != ""
+}
+
+func (c *Client) cookie() string {
+	c.sessionMu.Lock()
+	defer c.sessionMu.Unlock()
+	return c.session.Cookie
 }
 
 func (c *Client) MobileReady() bool {
@@ -271,7 +280,7 @@ func (c *Client) MarkStudied(id string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Cookie", c.session.Cookie)
+	req.Header.Set("Cookie", c.cookie())
 	req.Header.Set("X-CSRF-Token", csrfToken)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "duchinese-remarkable/0.1")
@@ -330,7 +339,9 @@ func (c *Client) openLessonOnline(path string, persistedReaderURL ...string) (js
 		return nil, errors.New("lesson is locked")
 	}
 	if metadata.CRDURL == "" {
+		c.entitledMu.Lock()
 		metadata.CRDURL = c.entitledCRD[lessonKey(lessonURL)]
+		c.entitledMu.Unlock()
 	}
 	if metadata.CRDURL == "" && len(persistedReaderURL) > 0 {
 		metadata.CRDURL = persistedReaderURL[0]
@@ -377,6 +388,8 @@ func (c *Client) rememberEntitledReaders(body []byte) {
 	if json.Unmarshal(body, &value) != nil {
 		return
 	}
+	c.entitledMu.Lock()
+	defer c.entitledMu.Unlock()
 	var visit func(any)
 	visit = func(current any) {
 		switch typed := current.(type) {
@@ -412,7 +425,7 @@ func (c *Client) get(rawURL string) ([]byte, string, error) {
 	req.Header.Set("User-Agent", "duchinese-remarkable/0.1")
 	req.Header.Set("Accept", "application/json,text/html;q=0.9,*/*;q=0.5")
 	if req.URL.Host == "duchinese.net" {
-		req.Header.Set("Cookie", c.session.Cookie)
+		req.Header.Set("Cookie", c.cookie())
 	}
 	res, err := c.http.Do(req)
 	if err != nil {
@@ -441,6 +454,8 @@ func (c *Client) get(rawURL string) ([]byte, string, error) {
 }
 
 func (c *Client) rotate(cookies []*http.Cookie) error {
+	c.sessionMu.Lock()
+	defer c.sessionMu.Unlock()
 	for _, cookie := range cookies {
 		if cookie.Name != sessionCookie || cookie.Value == "" {
 			continue

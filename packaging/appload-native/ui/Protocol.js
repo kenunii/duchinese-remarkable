@@ -15,8 +15,10 @@ var saved = 12
 var downloadCourse = 13
 var downloaded = 14
 var continueReading = 15
+var courseContext = 16
 
 var stateResponse = 101
 var dataResponse = 102
 var progressResponse = 103
+var controlResponse = 104
 var errorResponse = 199

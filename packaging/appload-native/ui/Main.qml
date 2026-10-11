@@ -9,7 +9,7 @@ Rectangle {
     color: "white"
 
     signal close
-    function unloading() {}
+    function unloading() { endpoint.terminate() }
 
     property string screen: "library"
     property string heading: "DuChinese"
@@ -18,6 +18,9 @@ Rectangle {
     property string listingKind: "top"
     property bool busy: true
     property var words: []
+    property var displayedPageItems: []
+    property var tokenWidthCache: ({})
+    property double lessonRequestStartedMs: 0
     property var sentenceEnds: []
     property var translations: []
     property int page: 0
@@ -25,6 +28,7 @@ Rectangle {
     property int selectedWord: -1
     property bool showPinyin: false
     property bool showSentenceTranslation: false
+    property bool pageIndicatorVisible: false
     property real swipeStartX: 0
     property real swipeStartY: 0
     property bool swipeHandled: false
@@ -32,6 +36,8 @@ Rectangle {
     property var listingPayload: null
     property var booksContext: ({ payload: null, kind: "top" })
     property var courseContext: ({ path: "", title: "" })
+    property bool courseDownloaded: false
+    property var courseCachedPaths: ({})
     property var readerReturn: ({ payload: null, kind: "top", coursePath: "" })
     property var readingProgress: ({ entries: {} })
     property var remoteStudied: ({})
@@ -39,6 +45,7 @@ Rectangle {
     property var pendingContinue: null
     property bool mobileAuthenticated: false
     property var finishStats: ({ chart_data: [], new_words: [], learned_words: [], new_count: 0, learned_count: 0 })
+    property bool finishStatsLoading: false
     property var finishWordList: []
     property string finishWordTitle: ""
     property int lessonCharacterCount: 0
@@ -152,6 +159,8 @@ Rectangle {
                     itemLevel: String(value.level || ""),
                     itemID: String(value.id || ""),
                     itemChapterLabel: chapterLabel,
+                    itemCached: !isCourse && root.listingKind === "course" &&
+                                root.courseCachedPaths[String(path)] === true,
                     itemCourse: isCourse,
                     itemLocked: value.locked === true,
                     itemStarted: !isCourse && (savedProgress !== undefined || isRemoteRead),
@@ -183,38 +192,64 @@ Rectangle {
         screen = "library"
     }
 
+    function setCourseCachedPaths(paths) {
+        var cached = {}
+        for (var index = 0; index < (paths || []).length; ++index)
+            cached[String(paths[index])] = true
+        courseCachedPaths = cached
+    }
+
     function lessonAt(index) {
         if (index < 0 || index >= lessonModel.count) return null
         var item = lessonModel.get(index)
         if (item.itemCourse || item.itemLocked) return null
         return { path: item.itemPath, title: item.itemRawTitle, level: item.itemLevel,
-                 id: item.itemID, chapterLabel: item.itemChapterLabel, listIndex: index }
+                 id: item.itemID, chapterLabel: item.itemChapterLabel,
+                 cached: item.itemCached, listIndex: index }
     }
 
     function openLesson(lesson) {
         if (!lesson) return
-        var inCourse = listingKind === "course"
-        readerReturn = { payload: listingPayload, kind: listingKind,
-                         coursePath: inCourse ? courseContext.path : "" }
+        pendingContinue = null
+        var inCourse = listingKind === "course" &&
+                       (!lesson.coursePath || lesson.coursePath === courseContext.path)
+        var lessonCoursePath = lesson.coursePath || (inCourse ? courseContext.path : "")
+        var returnPayload = listingPayload
+        var returnKind = listingKind
+        if (lessonCoursePath && readerReturn.kind === "course" &&
+                readerReturn.coursePath === lessonCoursePath && readerReturn.payload) {
+            returnPayload = readerReturn.payload
+            returnKind = "course"
+        }
+        readerReturn = { payload: returnPayload, kind: returnKind,
+                         coursePath: lessonCoursePath }
         activeLesson = {
             path: lesson.path, title: lesson.title, level: lesson.level || "",
             id: lesson.id || "", coursePath: readerReturn.coursePath,
             courseTitle: inCourse ? courseContext.title : (lesson.courseTitle || ""),
             chapterLabel: lesson.chapterLabel || "",
             resumeTime: Number(lesson.resumeTime || 0),
-            next: inCourse ? lessonAt(Number(lesson.listIndex) + 1) : null
+            next: inCourse && Number(lesson.listIndex) >= 0 ?
+                  lessonAt(Number(lesson.listIndex) + 1) :
+                  (returnKind === "course" ? courseLessonAfter(returnPayload, lesson,
+                       lessonCoursePath, lesson.courseTitle || courseContext.title) : null)
         }
-        send(Protocol.lesson, { path: lesson.path })
+        lessonRequestStartedMs = Date.now()
+        if (lesson.cached === true || courseCachedPaths[String(lesson.path)] === true)
+            sendBackground(Protocol.lesson, { path: lesson.path })
+        else send(Protocol.lesson, { path: lesson.path })
     }
 
-    function openItem(isCourse, path, title, level, id, chapterLabel, listIndex) {
+    function openItem(isCourse, path, title, level, id, chapterLabel, listIndex, cached) {
         if (!isCourse) {
             openLesson({ path: path, title: title, level: level, id: id,
-                         chapterLabel: chapterLabel, listIndex: listIndex })
+                         chapterLabel: chapterLabel, listIndex: listIndex, cached: cached })
             return
         }
         booksContext = { payload: listingPayload, kind: listingKind }
         courseContext = { path: path, title: title }
+        courseDownloaded = false
+        setCourseCachedPaths([])
         send(Protocol.course, { path: path })
     }
 
@@ -224,7 +259,11 @@ Rectangle {
     }
 
     function backFromReader() {
-        if (readerReturn.coursePath) send(Protocol.course, { path: readerReturn.coursePath })
+        if (readerReturn.coursePath && readerReturn.kind === "course" && readerReturn.payload) {
+            courseContext = { path: readerReturn.coursePath, title: activeLesson.courseTitle || "" }
+            showListing("course", readerReturn.payload)
+        }
+        else if (readerReturn.coursePath) send(Protocol.course, { path: readerReturn.coursePath })
         else if (readerReturn.payload) showListing(readerReturn.kind, readerReturn.payload)
         else send(Protocol.top, {})
     }
@@ -244,6 +283,8 @@ Rectangle {
     }
 
     function showLesson(payload) {
+        var layoutStartedMs = Date.now()
+        var requestStartedMs = lessonRequestStartedMs
         var lesson = payload.lesson || {}
         var reader = payload.reader || {}
         if (activeLesson) {
@@ -287,11 +328,17 @@ Rectangle {
             resumePosition = positionForAudioTime(reader.syllable_times || [], activeLesson.resumeTime)
         selectedWord = -1
         showSentenceTranslation = false
+        pageIndicatorTimer.stop()
+        rebuildPagination(resumePosition)
+        pageIndicatorVisible = true
+        pageIndicatorTimer.restart()
         screen = "reader"
         statusText = words.length ? "" : "This story contains no words"
+        saveProgress(false)
         Qt.callLater(function() {
-            rebuildPagination(resumePosition)
-            saveProgress(false)
+            console.log("[DuChinese] chapter open: layout " +
+                        (Date.now() - layoutStartedMs) + " ms, total " +
+                        (Date.now() - requestStartedMs) + " ms")
         })
     }
 
@@ -365,21 +412,26 @@ Rectangle {
         if (!activeLesson) return
         saveProgress(true)
         var wasAlreadyStudied = activeLesson.id && remoteStudied[String(activeLesson.id)] === true
-        if (mobileAuthenticated) {
-            send(Protocol.finishStats, { id: activeLesson.id || "", completed: wasAlreadyStudied })
-        } else {
-            if (!wasAlreadyStudied && activeLesson.id)
-                sendBackground(Protocol.markRead, { id: activeLesson.id })
-            finishStats = { chart_data: [], new_words: [], learned_words: [], new_count: -1, learned_count: -1 }
-            heading = "Great Job!"
-            screen = "finish"
-            statusText = "Mobile login required for word statistics"
-        }
+        finishStats = { chart_data: [], new_words: [], learned_words: [], new_count: -1, learned_count: -1 }
+        finishStatsLoading = mobileAuthenticated && Boolean(activeLesson.id)
+        heading = "Great Job!"
+        screen = "finish"
+        statusText = mobileAuthenticated ? "" : "Mobile login required for word statistics"
+        if (activeLesson.id)
+            sendBackground(Protocol.finishStats, { id: activeLesson.id, completed: wasAlreadyStudied })
     }
 
     function openNextChapter() {
         if (!activeLesson || !activeLesson.next) { backFromFinish(); return }
         openLesson(activeLesson.next)
+    }
+
+    function returnToLastPage() {
+        selectedWord = -1
+        screen = "reader"
+        statusText = ""
+        pageIndicatorVisible = true
+        pageIndicatorTimer.restart()
     }
 
     function showFinishWords(title, wordsToShow) {
@@ -406,7 +458,11 @@ Rectangle {
     function signedNumber(value) { return value > 0 ? "+" + value : String(value) }
 
     function backFromFinish() {
-        if (readerReturn.coursePath) send(Protocol.course, { path: readerReturn.coursePath })
+        if (readerReturn.coursePath && readerReturn.kind === "course" && readerReturn.payload) {
+            courseContext = { path: readerReturn.coursePath, title: activeLesson.courseTitle || "" }
+            showListing("course", readerReturn.payload)
+        }
+        else if (readerReturn.coursePath) send(Protocol.course, { path: readerReturn.coursePath })
         else if (readerReturn.payload) showListing(readerReturn.kind, readerReturn.payload)
         else send(Protocol.top, {})
     }
@@ -415,45 +471,61 @@ Rectangle {
         if (!readingProgress.last) return
         var last = readingProgress.last
         if (last.course_path) {
-            pendingContinue = last
             booksContext = { payload: listingPayload, kind: listingKind }
             courseContext = { path: last.course_path, title: last.course_title || "" }
-            send(Protocol.course, { path: last.course_path })
-            return
         }
-        readerReturn = { payload: listingPayload, kind: listingKind,
-                         coursePath: last.course_path || "" }
         openLesson({ path: last.path, title: last.title, level: last.level,
                      id: last.id, courseTitle: last.course_title,
+                     coursePath: last.course_path || "",
                      chapterLabel: last.chapter_label, resumeTime: last.start_time,
                      listIndex: -1 })
+        if (last.course_path) {
+            pendingContinue = last
+            sendBackground(Protocol.courseContext, { path: last.course_path })
+        }
     }
 
-    function continueFromCourse(payload) {
+    function continueFromCourse(payload, downloaded, cachedPaths) {
         var last = pendingContinue
         pendingContinue = null
-        showListing("course", payload)
-        for (var index = 0; index < lessonModel.count; ++index) {
-            var item = lessonModel.get(index)
-            if (String(item.itemPath) === String(last.path) ||
-                    (last.id && String(item.itemID) === String(last.id))) {
-                var lesson = lessonAt(index)
-                lesson.resumeTime = Number(last.start_time || 0)
-                openLesson(lesson)
-                return
+        if (!last || !activeLesson || String(activeLesson.path) !== String(last.path)) return
+        readerReturn = { payload: payload, kind: "course", coursePath: last.course_path }
+        courseDownloaded = downloaded === true
+        setCourseCachedPaths(cachedPaths)
+        activeLesson.next = courseLessonAfter(payload, last, last.course_path, last.course_title || "")
+    }
+
+    function courseLessonAfter(payload, lesson, coursePath, courseTitle) {
+        var chapters = payload.lessons || []
+        for (var index = 0; index < chapters.length; ++index) {
+            var item = chapters[index]
+            if (String(item.path || item.canonical_path) !== String(lesson.path) &&
+                    (!lesson.id || String(item.id) !== String(lesson.id))) continue
+            var next = chapters[index + 1]
+            if (next && next.locked !== true && (next.path || next.canonical_path)) {
+                return {
+                    path: next.path || next.canonical_path,
+                    title: next.title || next.name || "Chapter",
+                    level: next.level || "", id: String(next.id || ""),
+                    chapterLabel: next.course_position !== undefined && next.course_position !== null ?
+                                  "Chapter " + (Number(next.course_position) + 1) : "",
+                    coursePath: coursePath,
+                    courseTitle: courseTitle,
+                    cached: courseCachedPaths[String(next.path || next.canonical_path)] === true
+                }
             }
+            return null
         }
-        openLesson({ path: last.path, title: last.title, level: last.level,
-                     id: last.id, courseTitle: last.course_title,
-                     chapterLabel: last.chapter_label, resumeTime: last.start_time,
-                     listIndex: -1 })
+        return null
     }
 
     function receive(type, contents) {
         var data
         try { data = JSON.parse(String(contents)) }
         catch (error) { busy = false; statusText = "Invalid backend response"; return }
-        if (type === Protocol.stateResponse) {
+        if (type === Protocol.controlResponse && data.action === "exit") {
+            endpoint.terminate()
+        } else if (type === Protocol.stateResponse) {
             busy = false
             readingProgress = data.progress || { entries: {} }
             var cachedStudied = {}
@@ -472,41 +544,47 @@ Rectangle {
             else statusText = "Login required — import your browser session and reinstall"
         } else if (type === Protocol.dataResponse) {
             if (data.kind === "continue") applyRemoteContinue(data.payload)
-            else if (data.kind === "lesson") { busy = false; showLesson(data.payload) }
-            else if (data.kind === "course" && pendingContinue) {
+            else if (data.kind === "lesson") {
+                console.log("[DuChinese] chapter response received after " +
+                            (Date.now() - lessonRequestStartedMs) + " ms")
                 busy = false
-                continueFromCourse(data.payload)
+                showLesson(data.payload)
+            }
+            else if (data.kind === "course_context" && pendingContinue &&
+                     String(data.path) === String(pendingContinue.course_path)) {
+                continueFromCourse(data.payload, data.downloaded, data.cached_paths)
             }
             else if (data.kind === "finish_stats") {
-                busy = false
-                if (activeLesson && activeLesson.id) {
-                    var finishedStudied = {}
-                    for (var finishedID in remoteStudied) finishedStudied[finishedID] = remoteStudied[finishedID]
-                    finishedStudied[String(activeLesson.id)] = true
-                    remoteStudied = finishedStudied
-                }
+                if (!activeLesson || String(data.lesson_id) !== String(activeLesson.id)) return
                 finishStats = data.payload || finishStats
-                heading = "Great Job!"
-                screen = "finish"
+                finishStatsLoading = false
                 statusText = finishStats.pending_sync === true ?
                     "Saved offline — Read status will sync automatically" :
-                    (finishStats.stats_unavailable === true ? "Read saved — statistics unavailable offline" : "")
-                Qt.callLater(function() { finishChart.requestPaint() })
+                    (!mobileAuthenticated ? "Mobile login required for word statistics" :
+                    (finishStats.stats_unavailable === true ? "Read saved — statistics unavailable offline" : ""))
+                if (screen === "finish") Qt.callLater(function() { finishChart.requestPaint() })
             }
             else if (data.kind === "studied") {
                 var studied = {}
+                for (var knownID in remoteStudied) studied[knownID] = remoteStudied[knownID]
                 for (var studiedIndex = 0; studiedIndex < data.payload.length; ++studiedIndex)
                     studied[String(data.payload[studiedIndex])] = true
                 remoteStudied = studied
-                if (listingPayload) refreshListing("No stories found")
+                if (listingPayload && screen === "library") refreshListing("No stories found")
             }
             else if (data.kind === "download_course") {
                 busy = false
+                courseDownloaded = data.payload.downloaded === true
+                setCourseCachedPaths(data.payload.cached_paths)
                 statusText = "Downloaded " + Number(data.payload.count || 0) +
                     " chapters for offline reading"
             }
             else {
                 busy = false
+                if (data.kind === "course") {
+                    courseDownloaded = data.downloaded === true
+                    setCourseCachedPaths(data.cached_paths)
+                }
                 showListing(data.kind, data.payload)
                 if (data.kind === "top" || data.kind === "latest" ||
                         data.kind === "saved" || data.kind === "search")
@@ -524,9 +602,10 @@ Rectangle {
                 remoteStudied = updatedStudied
                 readingProgress = data.progress || readingProgress
             } else readingProgress = data
-            if (listingPayload) refreshListing("No stories found")
-            statusText = data.pending_sync === true ?
-                "Saved offline — Read status will sync automatically" : ""
+            if (listingPayload && screen === "library") refreshListing("No stories found")
+            if (!(screen === "finish" && finishStatsLoading))
+                statusText = data.pending_sync === true ?
+                    "Saved offline — Read status will sync automatically" : ""
         }
     }
 
@@ -536,13 +615,28 @@ Rectangle {
     }
     function tokenPadding(word) { return isSelectableWord(word) ? 14 : 0 }
     function measuredTokenWidth(word) {
-        hanziMeasure.text = wordText(word)
-        var width = hanziMeasure.implicitWidth
+        var text = String(wordText(word))
+        var pinyin = showPinyin ? String(word.pinyin || " ") : ""
+        var key = text + "\u0000" + pinyin
+        if (tokenWidthCache[key] !== undefined) return tokenWidthCache[key]
+        // Noto Sans SC renders these full-width characters at exactly the
+        // 42-pixel Hanzi size. Most lesson tokens use only these characters;
+        // measuring each one through a QML Text item stalls first-page layout.
+        var fullWidth = !showPinyin &&
+            /^[\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff01-\uff60\u2018\u2019\u201c\u201d\u2026]+$/.test(text)
+        var width
+        if (fullWidth) width = text.length * 42
+        else {
+            hanziMeasure.text = text
+            width = hanziMeasure.implicitWidth
+        }
         if (showPinyin) {
-            pinyinMeasure.text = word.pinyin || " "
+            pinyinMeasure.text = pinyin
             width = Math.max(width, pinyinMeasure.implicitWidth)
         }
-        return width + tokenPadding(word)
+        width += tokenPadding(word)
+        tokenWidthCache[key] = width
+        return width
     }
 
     function isClosingPunctuation(word) {
@@ -627,6 +721,9 @@ Rectangle {
                 break
             }
         }
+        // Publish once after all chapter/pagination properties are ready.
+        // A live pageItems() binding builds intermediate full-chapter models.
+        displayedPageItems = pageItems()
     }
 
     function currentPageStart() { return pageStarts[Math.min(page, pageStarts.length - 2)] || 0 }
@@ -636,9 +733,12 @@ Rectangle {
     function turnPage(direction) {
         selectedWord = -1
         if (direction > 0 && isLastPage()) { finishReading(); return }
+        if (direction < 0 && page === 0) { backFromReader(); return }
         if (direction > 0 && !isLastPage()) page++
         else if (direction < 0 && page > 0) page--
-        else if (direction < 0) return
+        displayedPageItems = pageItems()
+        pageIndicatorVisible = true
+        pageIndicatorTimer.restart()
         saveProgress(false)
     }
 
@@ -651,9 +751,20 @@ Rectangle {
     function finishSwipe(x, y) {
         var dx = x - swipeStartX
         var dy = y - swipeStartY
+        if (dy > 100 && dy > Math.abs(dx) * 1.5) {
+            swipeHandled = true
+            if (screen === "finish") backFromFinish()
+            else if (screen === "reader") backFromReader()
+            return true
+        }
         if (Math.abs(dx) < 100 || Math.abs(dx) < Math.abs(dy) * 1.5) return false
         swipeHandled = true
-        turnPage(dx < 0 ? 1 : -1)
+        if (screen === "finish") {
+            if (dx < 0) openNextChapter()
+            else returnToLastPage()
+        } else if (screen === "reader") {
+            turnPage(dx < 0 ? 1 : -1)
+        }
         return true
     }
 
@@ -690,7 +801,8 @@ Rectangle {
         if (selectedWord < 0) return ""
         for (var i = 0; i < sentenceEnds.length; ++i)
             if (selectedWord < Number(sentenceEnds[i])) return translations[i] || ""
-        return ""
+        // The final sentence has no closing index when it ends at the last word.
+        return translations[sentenceEnds.length] || ""
     }
 
     function toggleWord(index, item) {
@@ -709,10 +821,20 @@ Rectangle {
         onMessageReceived: (type, contents) => root.receive(type, contents)
     }
 
-    Component.onCompleted: send(Protocol.bootstrap, {})
+    Component.onCompleted: {
+        console.log("[DuChinese] reader revision: batched-page-layout-1")
+        send(Protocol.bootstrap, {})
+    }
+
+    Timer {
+        id: pageIndicatorTimer
+        interval: 2400
+        onTriggered: root.pageIndicatorVisible = false
+    }
 
     Rectangle {
         id: toolbar
+        visible: root.screen !== "reader"
         anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
         height: 108
         color: "white"
@@ -745,7 +867,8 @@ Rectangle {
 
         Rectangle {
             id: downloadCourseButton
-            visible: root.screen === "library" && root.listingKind === "course"
+            visible: root.screen === "library" && root.listingKind === "course" &&
+                     !root.courseDownloaded
             anchors.right: parent.right; anchors.rightMargin: 104
             anchors.verticalCenter: parent.verticalCenter
             width: 224; height: 66
@@ -758,35 +881,29 @@ Rectangle {
         }
 
         Text {
+            id: downloadedCourseLabel
+            visible: root.screen === "library" && root.listingKind === "course" &&
+                     root.courseDownloaded
+            anchors.right: parent.right; anchors.rightMargin: 104
+            anchors.verticalCenter: parent.verticalCenter
+            text: "✓ Downloaded"
+            color: "#333"
+            font.pixelSize: 21
+        }
+
+        Text {
             visible: root.screen !== "reader"
             anchors.left: parent.left
             anchors.leftMargin: booksBackButton.visible ? 194 : (finishWordsBackButton.visible ? 176 : 44)
             anchors.verticalCenter: parent.verticalCenter
-            width: downloadCourseButton.visible ? parent.width - 560 : parent.width - 360
+            width: downloadCourseButton.visible || downloadedCourseLabel.visible ?
+                   parent.width - 560 : parent.width - 360
             text: root.heading
             elide: Text.ElideRight
             color: "black"
             font.family: "Noto Sans"
             font.pixelSize: 36
             font.bold: true
-        }
-        Column {
-            visible: root.screen === "reader"
-            anchors.left: parent.left; anchors.leftMargin: 44
-            anchors.right: parent.right; anchors.rightMargin: 110
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: 3
-            Text {
-                width: parent.width; text: root.heading
-                elide: Text.ElideRight; color: "black"
-                font.family: "Noto Sans"; font.pixelSize: 31; font.bold: true
-            }
-            Text {
-                visible: root.readerChapterTitle !== ""
-                width: parent.width; text: root.readerChapterTitle
-                elide: Text.ElideRight; color: "#444"
-                font.family: "Noto Sans"; font.pixelSize: 20
-            }
         }
         Text {
             anchors.right: parent.right; anchors.rightMargin: 44
@@ -933,9 +1050,28 @@ Rectangle {
             }
             MouseArea {
                 anchors.fill: parent
-                enabled: !itemLocked
-                onClicked: root.openItem(itemCourse, itemPath, itemRawTitle, itemLevel,
-                                         itemID, itemChapterLabel, index)
+                property real swipeX: 0
+                property real swipeY: 0
+                property bool swipedBack: false
+                onPressed: (mouse) => {
+                    swipeX = mouse.x
+                    swipeY = mouse.y
+                    swipedBack = false
+                }
+                onReleased: (mouse) => {
+                    var dx = mouse.x - swipeX
+                    var dy = mouse.y - swipeY
+                    if (root.listingKind === "course" && dx < -100 &&
+                            -dx > Math.abs(dy) * 1.5) {
+                        swipedBack = true
+                        root.backToBooks()
+                    }
+                }
+                onClicked: {
+                    if (!swipedBack && !itemLocked)
+                        root.openItem(itemCourse, itemPath, itemRawTitle, itemLevel,
+                                      itemID, itemChapterLabel, index, itemCached)
+                }
             }
         }
     }
@@ -943,22 +1079,36 @@ Rectangle {
     SentenceTranslationBar {
         id: translationArea
         visible: root.screen === "reader"
-        anchors.top: toolbar.bottom; anchors.topMargin: 20
-        anchors.left: parent.left; anchors.leftMargin: 48
-        anchors.right: parent.right; anchors.rightMargin: 48
+        anchors.top: parent.top; anchors.topMargin: 32
+        anchors.left: parent.left; anchors.leftMargin: 64
+        anchors.right: parent.right; anchors.rightMargin: 64
         revealed: root.showSentenceTranslation
         hasSelection: root.selectedWord >= 0
         translation: root.selectedTranslation()
         onToggleRequested: root.showSentenceTranslation = !root.showSentenceTranslation
+        DragHandler {
+            target: null
+            property real dragX: 0
+            property real dragY: 0
+            onTranslationChanged: {
+                if (active) { dragX = translation.x; dragY = translation.y }
+            }
+            onActiveChanged: {
+                if (active) { dragX = 0; dragY = 0 }
+                else if (root.screen === "reader" && dragY > 100 &&
+                         dragY > Math.abs(dragX) * 1.5)
+                    root.backFromReader()
+            }
+        }
     }
 
     MouseArea {
         id: readerBackground
         visible: root.screen === "reader"
-        anchors.top: translationArea.bottom; anchors.topMargin: 24
-        anchors.left: parent.left; anchors.leftMargin: 48
-        anchors.right: parent.right; anchors.rightMargin: 48
-        height: root.height - 500
+        anchors.top: translationArea.bottom; anchors.topMargin: 18
+        anchors.left: parent.left; anchors.leftMargin: 64
+        anchors.right: parent.right; anchors.rightMargin: 64
+        anchors.bottom: parent.bottom
         onPressed: (mouse) => root.beginSwipe(mouse.x, mouse.y)
         onReleased: (mouse) => root.finishSwipe(mouse.x, mouse.y)
         onClicked: { if (!root.swipeHandled) root.selectedWord = -1 }
@@ -967,14 +1117,14 @@ Rectangle {
     Flow {
         id: wordFlow
         visible: root.screen === "reader"
-        anchors.top: translationArea.bottom; anchors.topMargin: 24
-        anchors.left: parent.left; anchors.leftMargin: 48
-        anchors.right: parent.right; anchors.rightMargin: 48
-        height: root.height - 500
+        anchors.top: translationArea.bottom; anchors.topMargin: 18
+        anchors.left: parent.left; anchors.leftMargin: 64
+        anchors.right: parent.right; anchors.rightMargin: 64
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 72
         spacing: 0
 
         Repeater {
-            model: root.pageItems()
+            model: root.displayedPageItems
             Rectangle {
                 property int absoluteIndex: modelData.absoluteIndex
                 property bool separator: modelData.separator
@@ -1009,60 +1159,47 @@ Rectangle {
         pinyin: root.selectedWord < 0 ? "" : (root.words[root.selectedWord].pinyin || "")
         meaning: root.selectedWord < 0 ? "" : (root.words[root.selectedWord].meaning || "")
         textFont: chineseFont.name
-        availableRect: Qt.rect(48, translationArea.y + translationArea.height + 12,
-                              root.width - 96, readerNav.y - translationArea.y - translationArea.height - 24)
+        availableRect: Qt.rect(wordFlow.x, wordFlow.y, wordFlow.width, wordFlow.height)
         onDismissed: root.selectedWord = -1
     }
 
-    Row {
-        id: readerNav
-        visible: root.screen === "reader"
-        anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: status.top
-        anchors.leftMargin: 48; anchors.rightMargin: 48; height: 70; spacing: 12
-        Repeater {
-            model: [
-                { label: "‹ Back", action: "back" },
-                { label: root.showPinyin ? "Hide pinyin" : "Show pinyin", action: "pinyin" },
-                { label: (root.page + 1) + " / " + Math.max(1, root.pageStarts.length - 1), action: "none" },
-                { label: root.isLastPage() ? "Finish ✓" : "Next ›", action: "next" }
-            ]
-            Rectangle {
-                width: (readerNav.width - 36) / 4; height: 66; color: "white"; border.width: 2; border.color: "black"
-                Text { anchors.centerIn: parent; text: modelData.label; font.pixelSize: 20 }
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: {
-                        root.selectedWord = -1
-                        if (modelData.action === "back") {
-                            if (root.page > 0) root.page--
-                            else root.backFromReader()
-                        } else if (modelData.action === "next") {
-                            root.turnPage(1)
-                        }
-                        else if (modelData.action === "pinyin") {
-                            var position = root.currentPageStart()
-                            root.showPinyin = !root.showPinyin
-                            Qt.callLater(function() { root.rebuildPagination(position) })
-                        }
-                    }
-                }
-            }
+    Rectangle {
+        id: pageIndicator
+        visible: root.screen === "reader" && root.pageIndicatorVisible
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 26
+        width: pageIndicatorText.implicitWidth + 36
+        height: 50
+        radius: 10
+        color: "#222222"
+        z: 30
+        Text {
+            id: pageIndicatorText
+            anchors.centerIn: parent
+            text: (root.page + 1) + "/" + Math.max(1, root.pageStarts.length - 1)
+            color: "white"
+            font.pixelSize: 21
         }
     }
 
-    Flickable {
+    Item {
         id: finishView
         visible: root.screen === "finish"
         anchors.top: toolbar.bottom; anchors.bottom: status.top
         anchors.left: parent.left; anchors.right: parent.right
-        contentWidth: width; contentHeight: finishContent.height + 60
         clip: true
+
+        MouseArea {
+            anchors.fill: parent
+            onPressed: (mouse) => root.beginSwipe(mouse.x, mouse.y)
+            onReleased: (mouse) => root.finishSwipe(mouse.x, mouse.y)
+        }
 
         Column {
             id: finishContent
             width: Math.min(parent.width - 96, 1040)
             x: (parent.width - width) / 2
-            y: 34
+            y: Math.max(24, (parent.height - height) / 2)
             spacing: 20
 
             Rectangle {
@@ -1177,7 +1314,8 @@ Rectangle {
                     Text {
                         visible: !(root.finishStats.chart_data || []).length
                         anchors.centerIn: parent
-                        text: root.mobileAuthenticated ? "No chart data" : "Mobile login required"
+                        text: root.finishStatsLoading ? "Loading word progress…" :
+                              (root.mobileAuthenticated ? "No chart data" : "Mobile login required")
                         font.pixelSize: 23; color: "#555"
                     }
                 }
@@ -1207,7 +1345,9 @@ Rectangle {
                         }
                         MouseArea {
                             anchors.fill: parent; enabled: Number(modelData.count) >= 0
-                            onClicked: root.showFinishWords(modelData.title, modelData.words)
+                            onPressed: (mouse) => root.beginSwipe(mouse.x, mouse.y)
+                            onReleased: (mouse) => root.finishSwipe(mouse.x, mouse.y)
+                            onClicked: { if (!root.swipeHandled) root.showFinishWords(modelData.title, modelData.words) }
                         }
                     }
                 }
@@ -1223,13 +1363,23 @@ Rectangle {
                 }
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: root.activeLesson && root.activeLesson.next ? root.openNextChapter() : root.backFromFinish()
+                    onPressed: (mouse) => root.beginSwipe(mouse.x, mouse.y)
+                    onReleased: (mouse) => root.finishSwipe(mouse.x, mouse.y)
+                    onClicked: {
+                        if (!root.swipeHandled)
+                            root.activeLesson && root.activeLesson.next ? root.openNextChapter() : root.backFromFinish()
+                    }
                 }
             }
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: "Go back"; font.pixelSize: 22; font.underline: true
-                MouseArea { anchors.fill: parent; anchors.margins: -18; onClicked: root.backFromFinish() }
+                MouseArea {
+                    anchors.fill: parent; anchors.margins: -18
+                    onPressed: (mouse) => root.beginSwipe(mouse.x, mouse.y)
+                    onReleased: (mouse) => root.finishSwipe(mouse.x, mouse.y)
+                    onClicked: { if (!root.swipeHandled) root.backFromFinish() }
+                }
             }
         }
     }
@@ -1265,6 +1415,7 @@ Rectangle {
 
     Text {
         id: status
+        visible: root.screen !== "reader"
         anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
         height: 62; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter
         text: root.busy ? "Loading…" : root.statusText

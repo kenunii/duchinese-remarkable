@@ -217,16 +217,29 @@ If `rcc` is installed outside `PATH`, point the build at it:
 RCC_BIN=/path/to/qt6/rcc scripts/install-appload-rm2.sh
 ```
 
-The installer builds and stages the complete package, verifies SHA-256 checksums,
-and installs it at `/home/root/xovi/exthome/appload/duchinese`. It backs up the
-previous package and restarts `xochitl` to clear AppLoad resources and Qt QML
-caches. This closes open AppLoad windows without rebooting the tablet. An
-identical package already activated in the current UI process skips the restart.
-If service activation fails, the installer restores the previous package.
+The installer builds and stages the complete package and verifies SHA-256 checksums.
+It replaces `/home/root/xovi/exthome/appload/duchinese` only when its backend and
+resource bundle are no longer resident. A backend can remain alive after its UI
+closes; this is reported as resident, not as proof that the app is open. A resident
+package is left untouched and the update remains staged (exit status 3). To fully
+quit an older build, open it as a window and long-press AppLoad's **X** control.
+New builds terminate their backend through AppLoad when closed. They also expose
+a private local control socket: the installer can request a full exit, checking
+the backend PID before asking its frontend to call AppLoad's terminate action.
+If this request is unsupported or the app stays resident, the update remains staged.
+
+The installer never kills processes or restarts `xochitl`, including during
+rollback. It preserves the previous package beside the staging directory.
+After installation, close apps and tap **Reload** in AppLoad before opening
+DuChinese. Disk installation and runtime activation are reported separately.
+Reload reparses the manifest and gives the QML resources a fresh URL prefix.
 Unlock the tablet and open AppLoad
 from the main UI, and tap **DuChinese**. Browse or search, open an unlocked
-story, and tap a Chinese word to show its pinyin and meaning. Tap the bordered
-translation area to show or hide the selected sentence's translation.
+story, and tap a Chinese word to show its pinyin and meaning. Tap the translation
+prompt to show or hide the selected sentence's translation. Swipe left and right
+to change pages; swiping right from the first page goes back, and swiping left
+from the last page finishes the chapter. The page count appears briefly when a
+chapter opens and after each page change.
 
 Running the installer again updates the existing installation. The session is
 left untouched unless `--with-session` or `--with-mobile-session` is passed

@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -81,15 +80,35 @@ func (c *Client) cacheLesson(path string, payload json.RawMessage) error {
 func (c *Client) cachedLesson(path string) (json.RawMessage, error) {
 	var cached lessonCache
 	if err := loadCache(c.lessonCachePath(path), &cached); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, ErrNoReaderData
-		}
-		return nil, err
+		return c.cachedLessonByPath(path)
 	}
 	if !json.Valid(cached.Payload) {
-		return nil, errors.New("cached lesson is invalid")
+		return c.cachedLessonByPath(path)
 	}
 	return cached.Payload, nil
+}
+
+func (c *Client) cachedLessonByPath(path string) (json.RawMessage, error) {
+	files, err := filepath.Glob(filepath.Join(c.cacheDir, "lessons", "*.json"))
+	if err != nil {
+		return nil, err
+	}
+	wanted := lessonKey(path)
+	if wanted == "" {
+		return nil, ErrNoReaderData
+	}
+	for _, file := range files {
+		var cached lessonCache
+		if loadCache(file, &cached) != nil || lessonKey(cached.Path) != wanted || !json.Valid(cached.Payload) {
+			continue
+		}
+		// Remember the alternate URL so future opens take the direct cache path.
+		if err := c.cacheLesson(path, cached.Payload); err != nil {
+			return nil, err
+		}
+		return cached.Payload, nil
+	}
+	return nil, ErrNoReaderData
 }
 
 func (c *Client) cacheCourse(path string, payload json.RawMessage) error {
@@ -102,6 +121,63 @@ func (c *Client) cachedCourse(path string) (json.RawMessage, error) {
 		return nil, err
 	}
 	return payload, nil
+}
+
+func (c *Client) CourseDownloaded(path string) bool {
+	complete, _ := c.CourseCacheStatus(path)
+	return complete
+}
+
+func (c *Client) CourseCacheStatus(path string) (bool, []string) {
+	payload, err := c.cachedCourse(path)
+	if err != nil {
+		return false, nil
+	}
+	var course struct {
+		Lessons []struct {
+			Path   string `json:"path"`
+			Locked bool   `json:"locked"`
+		} `json:"lessons"`
+	}
+	if json.Unmarshal(payload, &course) != nil {
+		return false, nil
+	}
+	available := 0
+	cachedPaths := make([]string, 0, len(course.Lessons))
+	var cachedKeys map[string]bool
+	for _, lesson := range course.Lessons {
+		if lesson.Locked || lesson.Path == "" {
+			continue
+		}
+		available++
+		var cached lessonCache
+		if loadCache(c.lessonCachePath(lesson.Path), &cached) == nil && json.Valid(cached.Payload) {
+			cachedPaths = append(cachedPaths, lesson.Path)
+			continue
+		}
+		if cachedKeys == nil {
+			cachedKeys = c.cachedLessonKeys()
+		}
+		if cachedKeys[lessonKey(lesson.Path)] {
+			cachedPaths = append(cachedPaths, lesson.Path)
+		}
+	}
+	return available > 0 && len(cachedPaths) == available, cachedPaths
+}
+
+func (c *Client) cachedLessonKeys() map[string]bool {
+	keys := make(map[string]bool)
+	files, err := filepath.Glob(filepath.Join(c.cacheDir, "lessons", "*.json"))
+	if err != nil {
+		return keys
+	}
+	for _, file := range files {
+		var cached lessonCache
+		if loadCache(file, &cached) == nil && cached.Path != "" && json.Valid(cached.Payload) {
+			keys[lessonKey(cached.Path)] = true
+		}
+	}
+	return keys
 }
 
 func (c *Client) Downloaded() (json.RawMessage, error) {

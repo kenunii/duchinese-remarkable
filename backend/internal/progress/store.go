@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -32,6 +33,7 @@ type State struct {
 }
 
 type Store struct {
+	mu    sync.Mutex
 	path  string
 	state State
 }
@@ -54,9 +56,30 @@ func Open(path string) (*Store, error) {
 	return store, nil
 }
 
-func (s *Store) State() State { return s.state }
+func (s *Store) State() State {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return copyState(s.state)
+}
+
+func copyState(state State) State {
+	copy := state
+	copy.Entries = make(map[string]Entry, len(state.Entries))
+	for path, entry := range state.Entries {
+		copy.Entries[path] = entry
+	}
+	if state.Last != nil {
+		last := *state.Last
+		copy.Last = &last
+	}
+	copy.PendingStudied = append([]string(nil), state.PendingStudied...)
+	copy.StudiedIDs = append([]string(nil), state.StudiedIDs...)
+	return copy
+}
 
 func (s *Store) Update(entry Entry) (State, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if existing, ok := s.state.Entries[entry.Path]; ok {
 		if entry.ReaderURL == "" {
 			entry.ReaderURL = existing.ReaderURL
@@ -77,15 +100,19 @@ func (s *Store) Update(entry Entry) (State, error) {
 	entry.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	s.state.Entries[entry.Path] = entry
 	s.state.Last = &entry
-	return s.state, s.save()
+	return copyState(s.state), s.save()
 }
 
 func (s *Store) Entry(path string) (Entry, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	entry, ok := s.state.Entries[path]
 	return entry, ok
 }
 
 func (s *Store) RecentCompletedIDs(limit int) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	entries := make([]Entry, 0, len(s.state.Entries))
 	for _, entry := range s.state.Entries {
 		if entry.Completed && entry.ID != "" {
@@ -107,6 +134,8 @@ func (s *Store) RecentCompletedIDs(limit int) []string {
 }
 
 func (s *Store) RememberReader(path, readerURL string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	entry := s.state.Entries[path]
 	entry.Path = path
 	entry.ReaderURL = readerURL
@@ -115,11 +144,15 @@ func (s *Store) RememberReader(path, readerURL string) error {
 }
 
 func (s *Store) SetLevelFilter(level string) (State, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.state.LevelFilter = level
-	return s.state, s.save()
+	return copyState(s.state), s.save()
 }
 
 func (s *Store) QueueStudied(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if id == "" {
 		return nil
 	}
@@ -133,10 +166,14 @@ func (s *Store) QueueStudied(id string) error {
 }
 
 func (s *Store) PendingStudiedIDs() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return append([]string(nil), s.state.PendingStudied...)
 }
 
 func (s *Store) ResolveStudied(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	pending := s.state.PendingStudied[:0]
 	for _, queued := range s.state.PendingStudied {
 		if queued != id {
@@ -151,6 +188,8 @@ func (s *Store) ResolveStudied(id string) error {
 }
 
 func (s *Store) SetStudiedIDs(ids []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	seen := make(map[string]bool, len(ids))
 	s.state.StudiedIDs = s.state.StudiedIDs[:0]
 	for _, id := range ids {
@@ -162,7 +201,25 @@ func (s *Store) SetStudiedIDs(ids []string) error {
 	return s.save()
 }
 
+func (s *Store) MergeStudiedIDs(ids []string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	seen := make(map[string]bool, len(s.state.StudiedIDs))
+	for _, id := range s.state.StudiedIDs {
+		seen[id] = true
+	}
+	for _, id := range ids {
+		if id != "" && !seen[id] {
+			s.state.StudiedIDs = append(s.state.StudiedIDs, id)
+			seen[id] = true
+		}
+	}
+	return append([]string(nil), s.state.StudiedIDs...), s.save()
+}
+
 func (s *Store) RememberStudied(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for _, studied := range s.state.StudiedIDs {
 		if studied == id {
 			return nil

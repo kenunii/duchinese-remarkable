@@ -29,6 +29,54 @@ func TestLessonCacheRoundTrip(t *testing.T) {
 	}
 }
 
+func TestOpenLessonUsesCachedAlternateQueryWithoutNetwork(t *testing.T) {
+	client := &Client{cacheDir: t.TempDir()}
+	payload := json.RawMessage(`{"lesson":{"id":42},"reader":{"words":[{"hanzi":"好"}]}}`)
+	if err := client.cacheLesson("/lessons/42-cached?from=course", payload); err != nil {
+		t.Fatal(err)
+	}
+	got, err := client.OpenLesson("/lessons/42-cached?from=continue")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(payload) {
+		t.Fatalf("cached payload = %s, want %s", got, payload)
+	}
+	if _, err := os.Stat(client.lessonCachePath("/lessons/42-cached?from=continue")); err != nil {
+		t.Fatalf("alternate cache key was not saved: %v", err)
+	}
+}
+
+func TestCourseDownloadedRequiresEveryAvailableChapter(t *testing.T) {
+	client := &Client{cacheDir: t.TempDir()}
+	coursePath := "/lessons/courses/7-cached/lessons.json"
+	course := json.RawMessage(`{"lessons":[{"path":"/lessons/1?from=course"},{"path":"/lessons/2?from=course"},{"path":"/lessons/3","locked":true}]}`)
+	if err := client.cacheCourse(coursePath, course); err != nil {
+		t.Fatal(err)
+	}
+	if client.CourseDownloaded(coursePath) {
+		t.Fatal("empty cache marked downloaded")
+	}
+	if err := client.cacheLesson("/lessons/1?from=other", json.RawMessage(`{"reader":{"words":[]}}`)); err != nil {
+		t.Fatal(err)
+	}
+	if client.CourseDownloaded(coursePath) {
+		t.Fatal("partly cached course marked downloaded")
+	}
+	if complete, paths := client.CourseCacheStatus(coursePath); complete || len(paths) != 1 || paths[0] != "/lessons/1?from=course" {
+		t.Fatalf("partial cache status = %v, %v", complete, paths)
+	}
+	if err := client.cacheLesson("/lessons/2?from=course", json.RawMessage(`{"reader":{"words":[]}}`)); err != nil {
+		t.Fatal(err)
+	}
+	if !client.CourseDownloaded(coursePath) {
+		t.Fatal("complete cache was not marked downloaded")
+	}
+	if complete, paths := client.CourseCacheStatus(coursePath); !complete || len(paths) != 2 {
+		t.Fatalf("complete cache status = %v, %v", complete, paths)
+	}
+}
+
 func TestDownloadedSkipsCorruptCache(t *testing.T) {
 	client := &Client{cacheDir: t.TempDir()}
 	dir := filepath.Join(client.cacheDir, "lessons")

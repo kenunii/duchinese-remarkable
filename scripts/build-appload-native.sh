@@ -23,6 +23,7 @@ if [[ -z "$rcc_bin" ]]; then
 fi
 
 mkdir -p "$output_dir/backend"
+printf '%s\n' appload-exit-v1 > "$output_dir/backend/control-protocol"
 cp "$source_dir/manifest.json" "$output_dir/manifest.json"
 cp "$source_dir/icon.png" "$output_dir/icon.png"
 "$rcc_bin" --binary -o "$output_dir/resources.rcc" "$source_dir/application.qrc"
