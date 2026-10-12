@@ -1,14 +1,48 @@
 import QtQuick 2.15
 import "LookupIndex.js" as LookupIndex
 import "LookupPageLoader.js" as LookupPageLoader
+import "ProcessingClient.js" as ProcessingClient
 
 Item {
     id: root
     property var nativeSceneView: null
     property string documentId: ""
     property int pageIndex: 0
-    property var pageData: LookupPageLoader.getPage(
+    property var cachedPageData: LookupPageLoader.getPage(
         documentId, pageIndex + 1, LookupIndex.documents[documentId])
+    property var processedPageData: null
+    property var pageData: processedPageData || cachedPageData
+    property string processedRevision: ""
+    property bool checkingProcessing: false
+
+    function refreshProcessing() {
+        if (!documentId || checkingProcessing) return
+        checkingProcessing = true
+        var id = documentId
+        var number = pageIndex + 1
+        ProcessingClient.request(id, "", "GET", function(job) {
+            if (!root) return
+            root.checkingProcessing = false
+            if (id !== root.documentId || number !== root.pageIndex + 1 || !job) return
+            if (job.state === "stale") { root.processedPageData = null; return }
+            var revision = id + "/" + number + "/" + job.revision
+            if (revision === root.processedRevision) return
+            root.processedRevision = revision
+            ProcessingClient.request(id, "/pages/" + number, "GET", function(page) {
+                if (root && id === root.documentId && number === root.pageIndex + 1 && page)
+                    root.processedPageData = page
+            })
+        })
+    }
+    function resetProcessedPage() {
+        processedPageData = null
+        processedRevision = ""
+        refreshProcessing()
+    }
+    onDocumentIdChanged: resetProcessedPage()
+    onPageIndexChanged: resetProcessedPage()
+    Component.onCompleted: refreshProcessing()
+    Timer { interval: 2500; repeat: true; running: root.documentId !== ""; onTriggered: root.refreshProcessing() }
     property var selectedWord: null
     property var selectedBox: null
     property int selectedSentenceIndex: -1

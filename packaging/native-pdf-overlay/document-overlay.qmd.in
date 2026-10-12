@@ -1,4 +1,11 @@
 AFFECT /qml/device/view/documentview/DocumentView.qml
+    TRAVERSE FocusScope#root > Item#_uiContainer > Toolbar#toolbar
+        LOCATE AFTER ALL
+        INSERT {
+            chineseDocumentId: root.document ? String(root.document.id) : ""
+        }
+    END TRAVERSE
+
     TRAVERSE FocusScope#root
         LOCATE AFTER ALL
         INSERT {
@@ -6,8 +13,7 @@ AFFECT /qml/device/view/documentview/DocumentView.qml
                 id: duchinesePdfOverlay
                 anchors.fill: parent
                 z: 100001
-                active: root.document !== null
-                    && @PDF_DOCUMENT_IDS@.indexOf(String(root.document.id)) >= 0
+                active: root.document !== null && root.document.fileType === Document.Pdf
                 source: "qrc:/duchinese-pdf-overlay/LookupOverlay.qml"
                 onLoaded: {
                     item.nativeSceneView = sceneView;
@@ -25,6 +31,32 @@ AFFECT /qml/device/view/documentview/DocumentView.qml
                         if (duchinesePdfOverlay.item)
                             duchinesePdfOverlay.item.pageIndex = root.currentPage;
                     }
+                }
+            }
+        }
+    END TRAVERSE
+END AFFECT
+
+AFFECT /qt/qml/xofm/libs/toolbar/qml/Toolbar.qml
+    TRAVERSE FocusScope#root
+        LOCATE AFTER ALL
+        INSERT {
+            property string chineseDocumentId: ""
+        }
+    END TRAVERSE
+END AFFECT
+
+AFFECT /qt/qml/xofm/libs/toolbar/qml/SettingsMenu.qml
+    TRAVERSE ToolbarTool#root > Component#settingsComponent > ColumnLayout#content
+        LOCATE AFTER ALL
+        INSERT {
+            Loader {
+                Layout.fillWidth: true
+                active: root.documentType === "pdf"
+                visible: active
+                source: "qrc:/duchinese-pdf-overlay/ProcessMenuItem.qml"
+                onLoaded: {
+                    item.documentId = Qt.binding(function() { return root.toolbar.chineseDocumentId; });
                 }
             }
         }

@@ -1,0 +1,294 @@
+{
+  "architecture": "armhf",
+  "distribution": "Debian 12 (bookworm)",
+  "packages": [
+    {
+      "file": "gcc-12-base_12.2.0-14+deb12u1_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/g/gcc-12/gcc-12-base_12.2.0-14%2bdeb12u1_armhf.deb",
+      "sha256": "aa50f90c440377b9219830ed3e658aedcb0a1c1bb47733eb05cf65545012f563",
+      "sha1": "dad315908c54246c04a5c98b99db9b3b567224b2"
+    },
+    {
+      "file": "libc6_2.36-9+deb12u14_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/g/glibc/libc6_2.36-9%2bdeb12u14_armhf.deb",
+      "sha256": "758c68b92654747025b48476a45c315bf16df1321224abdd9be672bfd120be45",
+      "sha1": "09067e3219971a778c5f02ade0f9ad5955347d4c"
+    },
+    {
+      "file": "libcom-err2_1.47.0-2+b2_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/e/e2fsprogs/libcom-err2_1.47.0-2%2bb2_armhf.deb",
+      "sha256": "dc81ddc4e62a2c9a702eac7937aeda9b7e60e852644d18f5afc0290517992d33",
+      "sha1": "6729cbee65c11a09750c85d50ed54c19c9afaeaf"
+    },
+    {
+      "file": "libevent-2.1-7_2.1.12-stable-8+deb12u1_armhf.deb",
+      "url": "https://deb.debian.org/debian-security/pool/updates/main/libe/libevent/libevent-2.1-7_2.1.12-stable-8%2bdeb12u1_armhf.deb",
+      "sha256": "7e57f9150d0a9f32a5d60ea2258127715f40bf093c681c78c06bf19796939cc6",
+      "sha1": "cd7940fd09baea89585ab4a8af47bf57f19da954"
+    },
+    {
+      "file": "libffi8_3.4.4-1_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/libf/libffi/libffi8_3.4.4-1_armhf.deb",
+      "sha256": "c709b6666a6f166b7aaf98c9e89ab17143d5b1d33e6b545e582b6b5da31ec2bd",
+      "sha1": "7e50b8e2a2e03401e4f29405cb5c505bbb4539cb"
+    },
+    {
+      "file": "libgcc-s1_12.2.0-14+deb12u1_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/g/gcc-12/libgcc-s1_12.2.0-14%2bdeb12u1_armhf.deb",
+      "sha256": "f58562bf01efd6112b914182147ee149e0d4c90869046e31844da8803669eeb3",
+      "sha1": "7079e17faf2f74aaecc1f234f7bba5c106c0af0e"
+    },
+    {
+      "file": "libgcrypt20_1.10.1-3+deb12u1_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/libg/libgcrypt20/libgcrypt20_1.10.1-3%2bdeb12u1_armhf.deb",
+      "sha256": "e217694621014cbb2849c2d9fd49e3a9ce9219c67c244286f35d277300a07b6f",
+      "sha1": "cc228631b20d20d8e5e04a567f1e7e2f32f73ce8"
+    },
+    {
+      "file": "libgmp10_2%3a6.2.1+dfsg1-1.1_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/g/gmp/libgmp10_6.2.1%2bdfsg1-1.1_armhf.deb",
+      "sha256": "240b6cc98c7fbd4781e8aa90d0bb68ccbc4a0931565cff7565509836bbd807ad",
+      "sha1": "c580627b70660f43c535d87b5d0bc72909a74cc1"
+    },
+    {
+      "file": "libgnutls30_3.7.9-2+deb12u7_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/g/gnutls28/libgnutls30_3.7.9-2%2bdeb12u7_armhf.deb",
+      "sha256": "99d9641407789e0ee373ae34da3c5670256707534699cb02d0619a5bc0c1d3ca",
+      "sha1": "a4c2e1ad2ef89f5668d974627d1937df100c63b6"
+    },
+    {
+      "file": "libgpg-error0_1.46-1_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/libg/libgpg-error/libgpg-error0_1.46-1_armhf.deb",
+      "sha256": "caa6ee2f9d1e5d7cd21a2bf712be8c836766cfa4fc76853feca7c4e69ec9b7ac",
+      "sha1": "df428c87698f663d5eb2c0f14a6084b3bd315cdb"
+    },
+    {
+      "file": "libgssapi-krb5-2_1.20.1-2+deb12u5_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/k/krb5/libgssapi-krb5-2_1.20.1-2%2bdeb12u5_armhf.deb",
+      "sha256": "e3f674af80e03b04a257eec5d4cb5baf680488b95f9f6eff35a151c1594432b0",
+      "sha1": "4792d35860850399c28ecd84f68213bd84dfac67"
+    },
+    {
+      "file": "libhogweed6_3.8.1-2_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/n/nettle/libhogweed6_3.8.1-2_armhf.deb",
+      "sha256": "428a57916626f0f6b2b80125d4b8754441515997ea6e87f3ef9ae5dcaf1f5867",
+      "sha1": "3cd6c4a17e15e6ee879c9e40efc2f103167eef6a"
+    },
+    {
+      "file": "libicu72_72.1-3+deb12u1_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/i/icu/libicu72_72.1-3%2bdeb12u1_armhf.deb",
+      "sha256": "fbb0b414ecf8054b07ff927fd4dca94f21ac6856dcc6fd41a077367032616693",
+      "sha1": "610747771adc5e509d5f8a9659fdf2a914486d26"
+    },
+    {
+      "file": "libidn2-0_2.3.3-1+b1_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/libi/libidn2/libidn2-0_2.3.3-1%2bb1_armhf.deb",
+      "sha256": "4bd11a1c6619d311b6b6dd44208d708f18ebcf70ee387a51fde849f783b1fdc8",
+      "sha1": "90140c8e09c2dbc951ab58a5ca621552d77af5f5"
+    },
+    {
+      "file": "libk5crypto3_1.20.1-2+deb12u5_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/k/krb5/libk5crypto3_1.20.1-2%2bdeb12u5_armhf.deb",
+      "sha256": "be0457040c22c67f765767f63dc5531f1629f8f4914bcc8992b1edea17f493d0",
+      "sha1": "6202ec30ddfd75de9381b984a130d80ee755cdf6"
+    },
+    {
+      "file": "libkeyutils1_1.6.3-2_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/k/keyutils/libkeyutils1_1.6.3-2_armhf.deb",
+      "sha256": "bfc6a3a668b58b88876b9e37192f669ceeb68db6d50c8374a9267a2bbd8f8a8e",
+      "sha1": "bbab42a20e4bcb1e9902353ae368f6a44c77ddc6"
+    },
+    {
+      "file": "libkrb5-3_1.20.1-2+deb12u5_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/k/krb5/libkrb5-3_1.20.1-2%2bdeb12u5_armhf.deb",
+      "sha256": "3dac821ed96dd0bfcafe9a1643f81ada7bcae30f64a3b5069fd1322886e6d478",
+      "sha1": "7b33a0b2614c7e57fcc154932d783179cdfa9e1b"
+    },
+    {
+      "file": "libkrb5support0_1.20.1-2+deb12u5_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/k/krb5/libkrb5support0_1.20.1-2%2bdeb12u5_armhf.deb",
+      "sha256": "85a53b81203d0773809a1a76c20bd92fc2aee7ae063592a8ed8e6499b86706fa",
+      "sha1": "8f6df8ed3af3669245cac39c548e523d3dc0d989"
+    },
+    {
+      "file": "liblz4-1_1.9.4-1_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/l/lz4/liblz4-1_1.9.4-1_armhf.deb",
+      "sha256": "a646819a654404c38c219f5df4504ba1c214326daca6a00ce4ad9bb073447fbd",
+      "sha1": "c80615a1b1baeb41f8aa31aaebb0d5270f064a26"
+    },
+    {
+      "file": "liblzma5_5.4.1-1+deb12u2_armhf.deb",
+      "url": "https://deb.debian.org/debian-security/pool/updates/main/x/xz-utils/liblzma5_5.4.1-1%2bdeb12u2_armhf.deb",
+      "sha256": "e18aee5a45b59f2f85f9aa2518b0bb5964b1ddce86c926297d9688652415d6d3",
+      "sha1": "36dffad646325b1137928812fe250890bb1cd62d"
+    },
+    {
+      "file": "libnettle8_3.8.1-2_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/n/nettle/libnettle8_3.8.1-2_armhf.deb",
+      "sha256": "daae2882b791bcd5054a96e36880eae6ad6434c5d54c7825650706c3ec4db4a7",
+      "sha1": "8a92838cc401eabc30ac79a3922325123d0d5690"
+    },
+    {
+      "file": "libopenconnect5_9.01-3_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/o/openconnect/libopenconnect5_9.01-3_armhf.deb",
+      "sha256": "b0c25c550ba88f4c5b506c50c53afeaeafa37d6a8bd9b6c71b6ed2d1bea5d8dc",
+      "sha1": "098081e0b25ef24a88c9631309117dea96c17406"
+    },
+    {
+      "file": "libp11-kit0_0.24.1-2_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/p/p11-kit/libp11-kit0_0.24.1-2_armhf.deb",
+      "sha256": "09c653218e180bc8157a077a2c92a5345de0975ec0b4b80f6940dbab88936cab",
+      "sha1": "a5aab3fdba388ac6bb996256b6e7303de9f55971"
+    },
+    {
+      "file": "libpcsclite1_1.9.9-2_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/p/pcsc-lite/libpcsclite1_1.9.9-2_armhf.deb",
+      "sha256": "09458be995526ea52ad391ff9e6b72ca704dc0840a4026f4f48ffc3d2470fc29",
+      "sha1": "be36849b2d8593b6f93f883208b946211a4b32fd"
+    },
+    {
+      "file": "libproxy1v5_0.4.18-1.2_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/libp/libproxy/libproxy1v5_0.4.18-1.2_armhf.deb",
+      "sha256": "9e331d80be518a9912e1b25a7b933468c3f0451867defdf38642cf5539635145",
+      "sha1": "b99e34f9f4b9af19e1485c09e26f50535896a158"
+    },
+    {
+      "file": "libpskc0_2.6.7-3.1+deb12u1_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/o/oath-toolkit/libpskc0_2.6.7-3.1%2bdeb12u1_armhf.deb",
+      "sha256": "5eb32bedde8237b546895b3b8d2a5d4f098938167de71d912be2506e0a77cc21",
+      "sha1": "45454936cf731ac30e12ddb490a8c2e73718f4b6"
+    },
+    {
+      "file": "libssl3_3.0.22-1~deb12u1_armhf.deb",
+      "url": "https://deb.debian.org/debian-security/pool/updates/main/o/openssl/libssl3_3.0.22-1%7edeb12u1_armhf.deb",
+      "sha256": "32675fe3c8deeec439ee85b8342916de95d9fa40b33f11699d640d62d0fd6e4c",
+      "sha1": "139cce865828926bda6ad0e5ec96a56e86231f9e"
+    },
+    {
+      "file": "libstdc++6_12.2.0-14+deb12u1_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/g/gcc-12/libstdc%2b%2b6_12.2.0-14%2bdeb12u1_armhf.deb",
+      "sha256": "66d53ddeb10a37f22e455611c2c515f9d444e523b55d873ff48bde47267963db",
+      "sha1": "13262595dbbd85de1eada364ff9969ed7e585ed0"
+    },
+    {
+      "file": "libstoken1_0.92-1_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/s/stoken/libstoken1_0.92-1_armhf.deb",
+      "sha256": "35060f19e7c902b2c31596aac7b6ff27bf931f4fef912d554a06af9742c22c1a",
+      "sha1": "7766ef7d2ffc39f867bfa87d3ef865d1829eb8bd"
+    },
+    {
+      "file": "libtasn1-6_4.19.0-2+deb12u1_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/libt/libtasn1-6/libtasn1-6_4.19.0-2%2bdeb12u1_armhf.deb",
+      "sha256": "3b06424dc152426bb67d828d835c5714a4620789c73a703c28873239539136ba",
+      "sha1": "b552d2d6329efc34fd62e8a7e5691c88cc38a484"
+    },
+    {
+      "file": "libtomcrypt1_1.18.2-6_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/libt/libtomcrypt/libtomcrypt1_1.18.2-6_armhf.deb",
+      "sha256": "ad36bac643ec0fbe0611a68facf579d5daf30293800714f924809a218ff69c69",
+      "sha1": "430af87b8a40314aa8f13eff0eac83a92714f49e"
+    },
+    {
+      "file": "libtommath1_1.2.0-6+deb12u1_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/libt/libtommath/libtommath1_1.2.0-6%2bdeb12u1_armhf.deb",
+      "sha256": "afba8152d77539a9af02bbd1f6b614426d6c768ddc3abb0aa19f28463e974092",
+      "sha1": "d44278b9ded39bf6ae64a970538d197c46220d98"
+    },
+    {
+      "file": "libtss2-esys-3.0.2-0_3.2.1-3_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/t/tpm2-tss/libtss2-esys-3.0.2-0_3.2.1-3_armhf.deb",
+      "sha256": "480e8d3a54277ecab93826b3b68bd29b20f5feb6660b51392e90f500ce35b179",
+      "sha1": "82c2dcc85056822ea85bcf4a0d937d801a2e4813"
+    },
+    {
+      "file": "libtss2-mu0_3.2.1-3_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/t/tpm2-tss/libtss2-mu0_3.2.1-3_armhf.deb",
+      "sha256": "add587a5b44956bd46dab0483fd41d57136e08f6c1c4553a070dba11957376c5",
+      "sha1": "73e524ff484d86fe2751794dc602289a3687fc27"
+    },
+    {
+      "file": "libtss2-sys1_3.2.1-3_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/t/tpm2-tss/libtss2-sys1_3.2.1-3_armhf.deb",
+      "sha256": "de3be043552f3ec11b89cb8104bcffccd23fead809377688bb615e4b939c663c",
+      "sha1": "9b1368ed7d635d2c9d5b6b34be1e4c95f4ba6ccd"
+    },
+    {
+      "file": "libtss2-tcti-cmd0_3.2.1-3_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/t/tpm2-tss/libtss2-tcti-cmd0_3.2.1-3_armhf.deb",
+      "sha256": "9ec36a2470a1ddbc1361231556d7b5a71be73cd4e2955bfd29ad71c077c16ab8",
+      "sha1": "9ee19066a141ccdcff84ae7787f923632b3439e6"
+    },
+    {
+      "file": "libtss2-tcti-device0_3.2.1-3_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/t/tpm2-tss/libtss2-tcti-device0_3.2.1-3_armhf.deb",
+      "sha256": "d629fda85342e80775dd0517620f2542dfe4e8f0b835af919855a5dec2ed6e5b",
+      "sha1": "3dd20d1dd40979e777d5de6de7a7489e1cff8934"
+    },
+    {
+      "file": "libtss2-tcti-mssim0_3.2.1-3_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/t/tpm2-tss/libtss2-tcti-mssim0_3.2.1-3_armhf.deb",
+      "sha256": "aec569e972162b1c5fdcbdcd2e6bfc17d418b75c229655ec5be41e76e4a4afff",
+      "sha1": "3f49fa2c72f7028da49f0f739b8cc20a922ce678"
+    },
+    {
+      "file": "libtss2-tcti-swtpm0_3.2.1-3_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/t/tpm2-tss/libtss2-tcti-swtpm0_3.2.1-3_armhf.deb",
+      "sha256": "b2993e6c01020b97b68296984a2b95a75d479e3ab93437717b92ae53a90d50ec",
+      "sha1": "b30592fcecf2cb383392f7c3a9f4a41555161dd2"
+    },
+    {
+      "file": "libtss2-tctildr0_3.2.1-3_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/t/tpm2-tss/libtss2-tctildr0_3.2.1-3_armhf.deb",
+      "sha256": "13b9040e2e632257971259a3ce6346fb18e3d8476ff2649b496106941960d25f",
+      "sha1": "ffb68ead1de81174605ee2222646beb2f915edb3"
+    },
+    {
+      "file": "libunistring2_1.0-2_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/libu/libunistring/libunistring2_1.0-2_armhf.deb",
+      "sha256": "238765946297dfea3c383338f5ceaa665a5c870ec014a1cccc639bd1a23cf3b7",
+      "sha1": "79450d325191fdac9bd56f8ac241c92f6d24840b"
+    },
+    {
+      "file": "libxml2_2.9.14+dfsg-1.3~deb12u6_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/libx/libxml2/libxml2_2.9.14%2bdfsg-1.3%7edeb12u6_armhf.deb",
+      "sha256": "fc424bafeacaa07084c9f7ebc2b3801d60b3295a6f958860e68a3ebd334d1a6a",
+      "sha1": "7a56a5dda262d5674ea2467993e7e0674b36c540"
+    },
+    {
+      "file": "libxmlsec1-openssl_1.2.37-2_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/x/xmlsec1/libxmlsec1-openssl_1.2.37-2_armhf.deb",
+      "sha256": "344f91f80600e148be7a6a22e6684d94344b4d166c82cc56c947a9a5ae1f4113",
+      "sha1": "be624a70ee1339cbcd4f1a517627424d75265f8b"
+    },
+    {
+      "file": "libxmlsec1_1.2.37-2_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/x/xmlsec1/libxmlsec1_1.2.37-2_armhf.deb",
+      "sha256": "2d04d5e4f4b452576dcdf82556cf456c0c3098d8cfdc5fbcbcb61f54502a01e9",
+      "sha1": "52eb420358b09bd5c0717e02e4f19d547e3d8e0b"
+    },
+    {
+      "file": "libxslt1.1_1.1.35-1+deb12u4_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/libx/libxslt/libxslt1.1_1.1.35-1%2bdeb12u4_armhf.deb",
+      "sha256": "55644b98b73b3398e82d22a17022a1db520ac5c72eed9b0c57eff2f687416978",
+      "sha1": "b342434e1be72bcdbf76890117935d944a75c1e5"
+    },
+    {
+      "file": "ocproxy_1.60-1+b2_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/o/ocproxy/ocproxy_1.60-1%2bb2_armhf.deb",
+      "sha256": "76def80e7d2a5e6e10fd6204b9a2dcdc58f0ec9e697686ea495e1f0e8633c6b4",
+      "sha1": "8fd9fc26d2d7e7b45b5da410142c84be761783c5"
+    },
+    {
+      "file": "openconnect_9.01-3_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/o/openconnect/openconnect_9.01-3_armhf.deb",
+      "sha256": "3a3ae822e4b1888588657a3d7a3f1dd2baa82f2682e0738f05ae91192526c8a0",
+      "sha1": "1db7f9c621e984ace44516d950317e399abb9968"
+    },
+    {
+      "file": "zlib1g_1%3a1.2.13.dfsg-1_armhf.deb",
+      "url": "https://deb.debian.org/debian/pool/main/z/zlib/zlib1g_1.2.13.dfsg-1_armhf.deb",
+      "sha256": "b52fcc443085ff9c676648b4d0fc97cd31b8f119bdd4e7534e50b6e9386502ba",
+      "sha1": "6c41e68750c027f32bb8feb85a54943492d81c52"
+    }
+  ]
+}

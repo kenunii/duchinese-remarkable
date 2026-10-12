@@ -14,12 +14,12 @@ mkdir -p "$output_dir"
 python3 "$project_root/scripts/build-native-pdf-overlay.py" "$output_dir" "$@"
 cp "$source_dir/LookupOverlay.qml" "$output_dir/LookupOverlay.qml"
 cp "$source_dir/LookupPageLoader.js" "$output_dir/LookupPageLoader.js"
+cp "$source_dir/ProcessingClient.js" "$output_dir/ProcessingClient.js"
+cp "$source_dir/ProcessMenuItem.qml" "$output_dir/ProcessMenuItem.qml"
 cp "$source_dir/SentencePopup.qml" "$output_dir/SentencePopup.qml"
 cp "$project_root/packaging/shared/WordPopup.qml" "$output_dir/WordPopup.qml"
-python3 "$project_root/scripts/subset-native-pdf-font.py" \
-    "$project_root/assets/fonts/NotoSansSC.ttf" "$output_dir/LookupGlyphs.txt" \
-    "$output_dir/NotoSansSC.ttf" "$source_dir/LookupOverlay.qml" \
-    "$source_dir/SentencePopup.qml" "$project_root/packaging/shared/WordPopup.qml"
+# New documents may contain glyphs absent from all prebuilt lookups.
+cp "$project_root/assets/fonts/NotoSansSC.ttf" "$output_dir/NotoSansSC.ttf"
 python3 - "$source_dir/document-overlay.qmd.in" "$output_dir/document-overlay.qmd" "$output_dir/LookupIndex.js" <<'PY'
 import json
 from pathlib import Path

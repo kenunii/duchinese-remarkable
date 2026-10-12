@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+bundle=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec "$bundle/root/lib/ld-linux-armhf.so.3" \
+    --library-path "$bundle/root/lib/arm-linux-gnueabihf:$bundle/root/usr/lib/arm-linux-gnueabihf" \
+    "$bundle/root/usr/sbin/openconnect" "$@"

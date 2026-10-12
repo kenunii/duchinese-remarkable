@@ -1,0 +1,17 @@
+[Unit]
+Description=Chinese PDF cloud processing
+After=network.target
+
+[Service]
+ExecStart=/home/root/.local/bin/duchinese-pdf-processor -documents /home/root/.local/share/remarkable/xochitl -cache /home/root/.local/share/duchinese-pdf-processing -credentials /home/root/.config/duchinese-pdf-processing/credentials.json
+Restart=on-failure
+RestartSec=10
+Nice=10
+OOMScoreAdjust=750
+Environment=GOMAXPROCS=1
+Environment=GOMEMLIMIT=192MiB
+MemoryMax=320M
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

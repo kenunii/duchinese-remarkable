@@ -97,7 +97,7 @@ def main():
     index = {}
     glyphs = set()
     resources = ['LookupOverlay.qml', 'SentencePopup.qml', 'LookupIndex.js',
-                 'LookupPageLoader.js',
+                 'LookupPageLoader.js', 'ProcessingClient.js', 'ProcessMenuItem.qml',
                  'WordPopup.qml', 'NotoSansSC.ttf']
     for document_id, document in documents.items():
         index[document_id] = sorted(document['pages'], key=int)
