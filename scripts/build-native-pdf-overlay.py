@@ -10,6 +10,9 @@ import sys
 from uuid import UUID
 from xml.etree import ElementTree
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pdf-import" / "src"))
+from duchinese_pdf.assemble import assemble
+
 
 def package(collection: Path, pdf: Path):
     manifest = json.loads((collection / 'manifest.json').read_text())
@@ -29,7 +32,18 @@ def package(collection: Path, pdf: Path):
     for entry in manifest['pages']:
         if entry['status'] != 'validated':
             continue
-        book = json.loads((collection / entry['book']).read_text())
+        book_path = collection / entry['book']
+        book = json.loads(book_path.read_text())
+        # Older cached books merged words across visual lines when the OCR
+        # assigned a whole paragraph one line ID. Rebuild from character boxes
+        # with the current assembler, preserving the reviewed text/translations.
+        annotation_dir = (collection / entry['annotation'] if entry.get('annotation')
+                          else book_path.parent / 'annotation')
+        characters_path = annotation_dir / 'result/characters.json'
+        if characters_path.exists():
+            characters = json.loads(characters_path.read_text())
+            rebuilt = assemble(characters, book, (book['image_width'], book['image_height']))
+            book['words'] = rebuilt['words']
         number = entry['page']
         if book['source_page'] != number:
             raise ValueError(f'Page mismatch at {number}: {collection}')

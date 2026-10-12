@@ -23,6 +23,11 @@ bash scripts/build-native-pdf-overlay.sh \
   [PREPARED_COLLECTION SOURCE_PDF TABLET_DOCUMENT_UUID ...]
 ```
 
+When saved character annotations are available, packaging rebuilds word hit boxes
+from those positions instead of reusing cached book rectangles. This keeps words
+that cross visual line breaks as separate rectangles, even when OCR labels the
+whole paragraph as one line. Text, meanings, and translations are preserved.
+
 The bundle is written to `build/native-pdf-overlay/`. The readable QMD patch is
 generated from `packaging/native-pdf-overlay/document-overlay.qmd.in`. It targets
 the reMarkable 3.27.3.0 document view. The generated bundle and document-specific

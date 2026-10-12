@@ -14,6 +14,15 @@ class AlignmentTests(unittest.TestCase):
     def test_word_across_lines_keeps_two_boxes(self):
         result=module.assemble(self.chars,self.annotations,(100,100))
         self.assertEqual(result['words'][0]['boxes'],[[10,10,20,20],[10,40,20,20]])
+    def test_word_wrapped_inside_one_ocr_region_keeps_two_boxes(self):
+        # Some OCR providers label an entire paragraph as one "line".
+        self.chars['characters'][0]['box'] = [1590, 450, 56, 53]
+        self.chars['characters'][1]['box'] = [241, 535, 53, 55]
+        self.chars['characters'][1]['line'] = 0
+        result = module.assemble(self.chars, self.annotations, (1985, 2807))
+        self.assertEqual(result['words'][0]['boxes'],
+                         [[1590, 450, 56, 53], [241, 535, 53, 55]])
+
     def test_rewritten_text_is_rejected(self):
         self.annotations['words'][0]['hanzi']='学生'
         with self.assertRaises(ValueError):module.assemble(self.chars,self.annotations,(100,100))
