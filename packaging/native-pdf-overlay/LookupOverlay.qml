@@ -7,7 +7,7 @@ Item {
     id: root
     property var nativeSceneView: null
     property string documentId: ""
-    property int pageIndex: 0
+    property int pageIndex: -1
     property var cachedPageData: LookupPageLoader.getPage(
         documentId, pageIndex + 1, LookupIndex.documents[documentId])
     property var processedPageData: null
@@ -16,7 +16,7 @@ Item {
     property bool checkingProcessing: false
 
     function refreshProcessing() {
-        if (!documentId || checkingProcessing) return
+        if (!documentId || pageIndex < 0 || checkingProcessing) return
         checkingProcessing = true
         var id = documentId
         var number = pageIndex + 1

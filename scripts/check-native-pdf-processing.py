@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+import re
 import sys
 import tempfile
 import threading
@@ -63,9 +64,13 @@ Button { property string label; property string description; property string ico
     component.setData(('''import QtQuick
 import "qrc:/duchinese-pdf-overlay"
 Item {
+ id: root
  width: 2000; height: 2800
- Item { id: scene; width: 2000; height: 2800; property rect pageBorderRect: Qt.rect(0,0,2000,2800) }
- LookupOverlay { id: lookup; anchors.fill: parent; nativeSceneView: scene; documentId: "DOC" }
+ property int currentPage: 0
+ property var document: ({id: "DOC", redirectionPageMap: [0, -1, 1, 4, 2]})
+ Item { id: duchinesePdfOverlay; property alias item: lookup }
+ Item { id: sceneView; width: 2000; height: 2800; property rect pageBorderRect: Qt.rect(0,0,2000,2800) }
+ LookupOverlay { id: lookup; anchors.fill: parent; nativeSceneView: sceneView; documentId: "DOC"; pageIndex: 0 }
  ProcessMenuItem { id: menu; documentId: "DOC" }
  property alias overlay: lookup
  property alias menu: menu
@@ -73,7 +78,7 @@ Item {
     obj = component.create()
     assert obj, component.errors()
     def evaluate(code):
-        expression = QQmlExpression(engine.rootContext(), obj, code)
+        expression = QQmlExpression(QQmlEngine.contextForObject(obj), obj, code)
         result = expression.evaluate()
         assert not expression.hasError(), expression.error().toString()
         return result[0] if isinstance(result, tuple) else result
@@ -103,7 +108,26 @@ Item {
     evaluate('overlay.pageIndex = 1')
     # No stale word/selection survives a page change while fetching its lookup.
     assert evaluate('overlay.processedPageData === null && overlay.selectedWord === null')
+    # Execute the actual native patch's initialization, including its bindings.
+    patch = (Path(__file__).resolve().parents[1] /
+             'packaging/native-pdf-overlay/document-overlay.qmd.in').read_text()
+    initialization = re.search(r'onLoaded: \{(.*?)\n                \}', patch, re.S).group(1)
+    evaluate('(function() { var item = overlay; ' + initialization + ' })()')
+    assert evaluate('overlay.pageIndex === 0')
+    evaluate('root.currentPage = 1')
+    assert evaluate('overlay.pageIndex === -1 && overlay.pageData === null')
+    evaluate('root.currentPage = 2')
+    assert evaluate('overlay.pageIndex === 1')
+    evaluate('root.currentPage = 3')
+    assert evaluate('overlay.pageIndex === 4')
+    evaluate('root.document = ({id: "DOC", redirectionPageMap: [0, 3, 2, 1]})'
+             .replace('DOC', document))
+    assert evaluate('overlay.pageIndex === 1')
+    evaluate('root.currentPage = 99')
+    assert evaluate('overlay.pageIndex === -1 && overlay.pageData === null')
+    evaluate('root.document = null')
+    assert evaluate('overlay.pageIndex === -1 && overlay.documentId === ""')
     obj.deleteLater()
     app.processEvents()
 server.shutdown()
-print('Native QML: menu start, cancel, resume, completion, live lookup and page reset passed.')
+print('Native QML: processing, live lookup, page reset, inserted/reordered PDF page mapping passed.')

@@ -17,20 +17,17 @@ AFFECT /qml/device/view/documentview/DocumentView.qml
                 source: "qrc:/duchinese-pdf-overlay/LookupOverlay.qml"
                 onLoaded: {
                     item.nativeSceneView = sceneView;
-                    item.documentId = String(root.document.id);
-                    item.pageIndex = root.currentPage;
+                    item.documentId = Qt.binding(function() {
+                        return root.document ? String(root.document.id) : "";
+                    });
+                    // Notebook positions include inserted notes and reordered pages.
+                    // Lookup data is indexed by the original PDF page instead.
+                    item.pageIndex = Qt.binding(function() {
+                        if (!root.document || root.currentPage < 0) return -1;
+                        var page = root.document.redirectionPageMap[root.currentPage];
+                        return typeof page === "number" && page >= 0 ? page : -1;
+                    });
                     console.log("[PDF lookup] overlay loaded for prepared PDF");
-                }
-                Connections {
-                    target: root
-                    function onDocumentChanged() {
-                        if (duchinesePdfOverlay.item && root.document)
-                            duchinesePdfOverlay.item.documentId = String(root.document.id);
-                    }
-                    function onCurrentPageChanged() {
-                        if (duchinesePdfOverlay.item)
-                            duchinesePdfOverlay.item.pageIndex = root.currentPage;
-                    }
                 }
             }
         }

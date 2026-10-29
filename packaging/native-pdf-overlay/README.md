@@ -15,6 +15,9 @@ from the PDF and its native ink data.
 Holding a finger on an annotated word shows the translation of its sentence and
 outlines the sentence's text lines.
 
+Lookup follows the document's original PDF page mapping, including after pages
+are inserted, deleted, or reordered. Inserted notebook pages have no PDF lookups.
+
 Build the resource bundle with:
 
 ```sh
