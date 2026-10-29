@@ -7,11 +7,14 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import time
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT = ROOT / 'build/new-textbook-complete-20261008'
+sys.path.insert(0, str(ROOT / 'pdf-import/src'))
+from duchinese_pdf.assemble import assemble
 
 
 def build(collection, output):
@@ -24,6 +27,13 @@ def build(collection, output):
             source = json.loads((collection / entry['book']).read_text())
             width, height = source['image_width'], source['image_height']
             if entry['status'] == 'validated':
+                book_path = collection / entry['book']
+                annotation_dir = (collection / entry['annotation'] if entry.get('annotation')
+                                  else book_path.parent / 'annotation')
+                characters_path = annotation_dir / 'result/characters.json'
+                if characters_path.exists():
+                    characters = json.loads(characters_path.read_text())
+                    source['words'] = assemble(characters, source, (width, height))['words']
                 data = {k: source[k] for k in ('words', 'sentences')}
         else:
             from PIL import Image

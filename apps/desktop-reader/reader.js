@@ -49,6 +49,10 @@ function mount(index) {
       el.className = 'word'; el.dataset.word = i;
       el.setAttribute('aria-label', word.hanzi);
       Object.assign(el.style, {left:100*x/p.width+'%', top:100*y/p.height+'%', width:100*w/p.width+'%', height:100*h/p.height+'%'});
+      const highlight = active => regions.querySelectorAll(`[data-word="${i}"]`)
+        .forEach(part => part.classList.toggle('hovered', active));
+      el.onpointerenter = event => { if (event.pointerType !== 'touch') highlight(true); };
+      el.onpointerleave = () => highlight(false);
       el.onclick = event => { event.stopPropagation(); lookup(index, i, el); };
       regions.append(el);
     });
