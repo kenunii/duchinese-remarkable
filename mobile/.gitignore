@@ -1,0 +1,21 @@
+**/build/
+.gradle/
+.kotlin/
+.idea/
+local.properties
+**/xcuserdata/
+**/composeResources/files/textbook/
+
+# Apple signing assets stay on the deployment host
+*.p8
+*.p12
+*.mobileprovision
+
+# Local diagnostic and distribution artifacts
+*.log
+*.apk
+*.aab
+*.ipa
+*.xcarchive/
+*.keystore
+*.jks

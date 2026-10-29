@@ -277,3 +277,10 @@ scripts/build-appload-native.sh
 
 The generated `manifest.json` and `resources.rcc` are written to
 `build/appload-native`.
+
+## Android and iOS reader
+
+The [shared mobile app](mobile/README.md) reads the same prepared textbook
+collection offline, with swiping, pinch zoom, contextual word lookup and saved
+reading position. Its source is in `mobile/`; private textbook assets remain
+ignored and are exported with `scripts/prepare-mobile-textbook.py`.
