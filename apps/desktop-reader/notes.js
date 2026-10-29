@@ -38,8 +38,15 @@ function renderNote(note) {
   const preview = document.createElement('div'); preview.className = 'note-preview';
   const readout = document.createElement('span'); readout.textContent = note.text;
   preview.append(readout);
+  const handle = document.createElement('div'); handle.className = 'note-resize';
+  handle.title = 'Drag to change textbox width';
   for (const key of ['left','top','width','fontSize']) preview.style[key] = field.style[key];
   let composing = false, removed = false, drag = null, suppressClick = false;
+  function positionHandle() {
+    handle.style.left = 100*(note.x+note.w)+'%';
+    handle.style.top = 100*(note.y+note.h/2)+'%';
+  }
+  positionHandle();
   function discard() {
     if (removed) return;
     removed = true;
@@ -48,6 +55,7 @@ function renderNote(note) {
     notes = notes.filter(n => n.id !== note.id);
     field.remove();
     preview.remove();
+    handle.remove();
     saveNote(note);
   }
   function finishEditing() {
@@ -63,7 +71,14 @@ function renderNote(note) {
     const height = Math.max(field.scrollHeight+2, parseFloat(getComputedStyle(field).fontSize)*1.5);
     note.h = Math.min(1-note.y, height/sheet.clientHeight);
     field.style.height = 100*note.h+'%';
+    positionHandle();
     if (!composing) scheduleNoteSave(note);
+  }
+  function setWidth(width) {
+    note.w = Math.max(.01, Math.min(1-note.x, width));
+    field.style.width = 100*note.w+'%';
+    preview.style.width = field.style.width;
+    update();
   }
   field.addEventListener('compositionstart', () => { composing = true; clearTimeout(noteSaves.get(note.id)); });
   field.addEventListener('compositionend', () => {
@@ -75,6 +90,10 @@ function renderNote(note) {
   field.addEventListener('keydown', event => {
     // Enter belongs to the IME while its candidate window is active.
     if (event.isComposing || composing || event.keyCode === 229) return;
+    if (event.ctrlKey && event.shiftKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+      event.preventDefault();
+      setWidth(note.w + (event.key === 'ArrowRight' ? .02 : -.02));
+    }
     if (event.key === 'Escape' || ((event.ctrlKey || event.metaKey) && event.key === 'Enter')) {
       event.preventDefault(); field.blur(); viewer.focus({preventScroll:true});
     }
@@ -104,6 +123,7 @@ function renderNote(note) {
     note.y = Math.max(0, Math.min(1-note.h, drag.top+dy/drag.height));
     field.style.left = 100*note.x+'%'; field.style.top = 100*note.y+'%';
     preview.style.left = field.style.left; preview.style.top = field.style.top;
+    positionHandle();
   });
   function endDrag(event) {
     if (!drag || event.pointerId !== drag.id) return;
@@ -119,6 +139,28 @@ function renderNote(note) {
   field.addEventListener('pointerup', endDrag);
   field.addEventListener('pointercancel', endDrag);
   field.addEventListener('lostpointercapture', endDrag);
+  let resizing = null;
+  handle.addEventListener('pointerdown', event => {
+    if (event.button !== 0) return;
+    event.preventDefault(); event.stopPropagation(); finishPinch();
+    resizing = {id:event.pointerId, x:event.clientX, width:note.w, pageWidth:sheet.getBoundingClientRect().width};
+    handle.setPointerCapture(event.pointerId);
+  });
+  handle.addEventListener('pointermove', event => {
+    if (!resizing || event.pointerId !== resizing.id) return;
+    event.preventDefault(); event.stopPropagation();
+    setWidth(resizing.width+(event.clientX-resizing.x)/resizing.pageWidth);
+  });
+  function endResize(event) {
+    if (!resizing || event.pointerId !== resizing.id) return;
+    const id = resizing.id; resizing = null;
+    if (handle.hasPointerCapture(id)) handle.releasePointerCapture(id);
+    if (field.value.trim()) saveNote(note);
+  }
+  handle.addEventListener('pointerup', endResize);
+  handle.addEventListener('pointercancel', endResize);
+  handle.addEventListener('lostpointercapture', endResize);
+  handle.addEventListener('click', event => event.stopPropagation());
   function clickNote(event) {
     event.stopPropagation();
     if (suppressClick) { suppressClick = false; event.preventDefault(); return; }
@@ -133,7 +175,7 @@ function renderNote(note) {
   }
   field.addEventListener('click', clickNote);
   preview.addEventListener('click', clickNote);
-  sheet.append(field,preview);
+  sheet.append(field,preview,handle);
   return field;
 }
 function scheduleNoteSave(note) {
@@ -164,7 +206,11 @@ notesReady.then(() => {
       if (existing) {
         Object.assign(existing,pending);
         const old = document.querySelector(`[data-note="${pending.id}"]`);
-        if (old?.nextElementSibling?.classList.contains('note-preview')) old.nextElementSibling.remove();
+        if (old?.nextElementSibling?.classList.contains('note-preview')) {
+          const preview = old.nextElementSibling;
+          if (preview.nextElementSibling?.classList.contains('note-resize')) preview.nextElementSibling.remove();
+          preview.remove();
+        }
         old?.remove();
       }
       else notes.push(pending);
@@ -181,7 +227,7 @@ document.addEventListener('keydown', event => {
   if (event.key === 'Escape') setTextMode(false);
 });
 viewer.addEventListener('click', async event => {
-  if (!textMode || event.target.closest('.note,.note-preview')) return;
+  if (!textMode || event.target.closest('.note,.note-preview,.note-resize')) return;
   const sheet = event.target.closest('.sheet');
   if (!sheet) return;
   event.preventDefault(); event.stopImmediatePropagation();
@@ -190,9 +236,11 @@ viewer.addEventListener('click', async event => {
   if (!noteToken) return;
   const index = Number(sheet.dataset.index), box = sheet.getBoundingClientRect();
   const x = Math.min(.96,Math.max(0,(event.clientX-box.left)/box.width));
-  const y = Math.min(.96,Math.max(0,(event.clientY-box.top)/box.height));
+  const fontSize = 36;
+  const halfLineHeight = fontSize/book.pages[index].width*box.width*1.4/2;
+  const y = Math.min(.96,Math.max(0,(event.clientY-box.top-halfLineHeight)/box.height));
   const note = {id:crypto.randomUUID(),page:book.pages[index].page,text:'',x,y,
-    w:Math.min(.32,1-x),h:Math.min(.04,1-y),font_size:36};
+    w:Math.min(.32,1-x),h:Math.min(.04,1-y),font_size:fontSize};
   notes.push(note);
   const field = renderNote(note); field.focus({preventScroll:true});
 }, {capture:true});

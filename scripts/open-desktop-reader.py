@@ -105,7 +105,7 @@ def main():
     # A runtime Hyprland rule is reapplied whenever the application is launched.
     if os.environ.get('HYPRLAND_INSTANCE_SIGNATURE') and shutil.which('hyprctl'):
         subprocess.run(['hyprctl', 'keyword', 'windowrule',
-                        'match:title ^Chinese Book$, '
+                        'match:title ^中文课本$, '
                         'scroll_touchpad 0.35, scroll_mouse 0.35'],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     subprocess.Popen([browser, '--app=' + url, '--class=chinese-book',

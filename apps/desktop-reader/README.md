@@ -9,7 +9,9 @@ click elsewhere, press Escape, or Ctrl+Enter to finish. Click existing text to
 edit it. Unfocused textboxes are clickable only on their visible text; blank
 space passes clicks through to the textbook. **Alt-click** a textbox to delete
 it; **Ctrl-drag** to move it within the page. Both changes save automatically
-to the PDF. Clearing the text also
+to the PDF. While editing, drag the handle on the right edge to change its
+width, or press **Ctrl+Shift+Left/Right**. Width changes also save automatically.
+Clearing the text also
 removes it from the saved PDF. Empty or whitespace-only textboxes disappear
 when they lose focus. No toolbar is added.
 
