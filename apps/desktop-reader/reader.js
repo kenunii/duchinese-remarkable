@@ -7,6 +7,8 @@ let current = 0, zoom = 1, selected = null, saveTimer, scrollFrame;
 let pinch = null, pinchTimer, pinchFrame;
 let progressToken = '', progressReady = false, positionTouched = false;
 const sheets = [];
+const unloadTimers = new Map();
+const nearbyPages = new Set(), visiblePages = new Set();
 function dismiss() {
   $('popup').hidden = true;
   document.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
@@ -37,11 +39,14 @@ function lookup(pageIndex, wordIndex, target) {
 }
 function mount(index) {
   const sheet = sheets[index];
+  clearTimeout(unloadTimers.get(index));
+  unloadTimers.delete(index);
   if (sheet.dataset.loaded) return;
   sheet.dataset.loaded = 'true';
   const p = book.pages[index];
   sheet.querySelector('img').src = p.image;
   const regions = sheet.querySelector('.regions');
+  const fragment = document.createDocumentFragment();
   (p.data?.words || []).forEach((word, i) => {
     if (!word.pinyin && !word.meaning) return;
     word.boxes.forEach(([x, y, w, h]) => {
@@ -49,28 +54,67 @@ function mount(index) {
       el.className = 'word'; el.dataset.word = i;
       el.setAttribute('aria-label', word.hanzi);
       Object.assign(el.style, {left:100*x/p.width+'%', top:100*y/p.height+'%', width:100*w/p.width+'%', height:100*h/p.height+'%'});
-      const highlight = active => regions.querySelectorAll(`[data-word="${i}"]`)
-        .forEach(part => part.classList.toggle('hovered', active));
-      el.onpointerenter = event => { if (event.pointerType !== 'touch') highlight(true); };
-      el.onpointerleave = () => highlight(false);
-      el.onclick = event => { event.stopPropagation(); lookup(index, i, el); };
-      regions.append(el);
+      fragment.append(el);
     });
   });
+  regions.append(fragment);
 }
 function unmount(index) {
   const sheet = sheets[index];
+  if (!sheet.dataset.loaded) return;
   if (selected && sheet.contains(selected)) dismiss();
   sheet.querySelector('img').removeAttribute('src');
   sheet.querySelector('.regions').replaceChildren();
   delete sheet.dataset.loaded;
 }
-// Keep all page positions stable while decoding only nearby pages.
+// Delegate word interactions so page changes do not create hundreds of handlers.
+viewer.addEventListener('click', event => {
+  const word = event.target.closest('.word');
+  if (!word || !viewer.contains(word)) return;
+  event.stopPropagation();
+  lookup(Number(word.closest('.sheet').dataset.index), Number(word.dataset.word), word);
+});
+function highlightWord(word, active) {
+  if (!word) return;
+  word.parentElement.querySelectorAll(`[data-word="${word.dataset.word}"]`)
+    .forEach(part => part.classList.toggle('hovered', active));
+}
+viewer.addEventListener('pointerover', event => {
+  if (event.pointerType !== 'touch') highlightWord(event.target.closest('.word'), true);
+});
+viewer.addEventListener('pointerout', event => highlightWord(event.target.closest('.word'), false));
+function needed(index) {
+  return nearbyPages.has(index) || [...visiblePages].some(visible => Math.abs(visible-index) <= 1);
+}
+function updatePage(index) {
+  if (index < 0 || index >= sheets.length) return;
+  if (needed(index)) mount(index);
+  else if (sheets[index].dataset.loaded && !unloadTimers.has(index)) {
+    // Avoid rebuilding a page when scrolling back and forth near a boundary.
+    unloadTimers.set(index, setTimeout(() => {
+      unloadTimers.delete(index);
+      if (!needed(index)) unmount(index);
+    }, 3000));
+  }
+}
+// Keep the visible pages and their immediate neighbors loaded even at high zoom.
+const visibleObserver = new IntersectionObserver(entries => {
+  if (pinch) return;
+  const changed = new Set();
+  for (const entry of entries) {
+    const index = Number(entry.target.dataset.index);
+    if (entry.isIntersecting) visiblePages.add(index); else visiblePages.delete(index);
+    for (let i = index-1; i <= index+1; i++) changed.add(i);
+  }
+  for (const index of changed) updatePage(index);
+}, {root:viewer});
+// Preload additional pages within the scroll margin.
 const observer = new IntersectionObserver(entries => {
   if (pinch) return;
   for (const entry of entries) {
     const index = Number(entry.target.dataset.index);
-    if (entry.isIntersecting) mount(index); else unmount(index);
+    if (entry.isIntersecting) nearbyPages.add(index); else nearbyPages.delete(index);
+    updatePage(index);
   }
 }, {root:viewer, rootMargin:'1600px 0px'});
 book.pages.forEach((p, i) => {
@@ -80,11 +124,13 @@ book.pages.forEach((p, i) => {
   sheet.style.aspectRatio = `${p.width} / ${p.height}`;
   const image = document.createElement('img');
   image.className = 'scan'; image.width = p.width; image.height = p.height;
+  image.decoding = 'async';
   image.alt = `PDF page ${p.page}`; image.draggable = false;
   image.onerror = () => { if (image.hasAttribute('src')) $('notice').textContent = `Could not load page ${p.page}.`; };
   const regions = document.createElement('div'); regions.className = 'regions';
   sheet.append(image, regions); $('pages').append(sheet); sheets.push(sheet);
   observer.observe(sheet);
+  visibleObserver.observe(sheet);
 });
 function position() {
   const y = viewer.scrollTop + 12;
@@ -173,7 +219,10 @@ function finishPinch() {
   pinch = null;
   zoomAt(gesture.factor, gesture.x, gesture.y);
   // Refresh visibility once, after the final page dimensions are committed.
-  for (const sheet of sheets) { observer.unobserve(sheet); observer.observe(sheet); }
+  for (const sheet of sheets) {
+    observer.unobserve(sheet); observer.observe(sheet);
+    visibleObserver.unobserve(sheet); visibleObserver.observe(sheet);
+  }
 }
 $('total').textContent = '/ ' + book.pages.at(-1).page;
 $('page').max = book.pages.at(-1).page;

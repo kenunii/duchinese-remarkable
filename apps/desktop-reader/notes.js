@@ -36,6 +36,8 @@ function renderNote(note) {
     height:100*note.h+'%',fontSize:`calc(var(--page-width) * ${note.font_size/book.pages[index].width})`});
   // Inline text has native hit boxes for each wrapped line, unlike a textarea.
   const preview = document.createElement('div'); preview.className = 'note-preview';
+  // Match the editor's language so Chromium chooses the same CJK fallback font.
+  preview.lang = field.lang;
   const readout = document.createElement('span'); readout.textContent = note.text;
   preview.append(readout);
   const handle = document.createElement('div'); handle.className = 'note-resize';
